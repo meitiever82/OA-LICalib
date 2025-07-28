@@ -76,11 +76,14 @@ class SegmentDatasetManager {
 
       std::shared_ptr<liso::IO::LioDataset> dataset_reader;
       dataset_reader = std::make_shared<liso::IO::LioDataset>(lidar_model);
-      // TODO: Re-enable rosbag reading for ROS2
-      // dataset_reader->Read(bag_path, topic_imu, topic_lidar, bag_start,
-      //                      bag_durr);
-      // dataset_reader->AdjustDatasetTime();
-      std::cout << "Warning: Rosbag reading currently disabled for ROS2 migration" << std::endl;
+      
+      // Read rosbag2 data
+      if (!dataset_reader->Read(bag_path, topic_imu, topic_lidar, bag_start, bag_durr)) {
+        RCLCPP_ERROR(rclcpp::get_logger("segment_dataset"), 
+                     "Failed to read rosbag2 data from: %s", bag_path.c_str());
+        continue;  // Skip this segment but continue with others
+      }
+      dataset_reader->AdjustDatasetTime();
 
       AddSegmentData(dataset_reader);
     }

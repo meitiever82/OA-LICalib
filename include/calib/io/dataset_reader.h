@@ -23,24 +23,26 @@
 #ifndef DATASET_READER_H
 #define DATASET_READER_H
 
-/// read rosbag - COMMENTED OUT FOR ROS2 MIGRATION
-// TODO: Reimplement using rosbag2 API
-/*#include <boost/foreach.hpp>
-#include <rosbag2_cpp/converter_interfaces/serialization_format_converter.hpp>
-#include <rosbag2_cpp/reader_interfaces/base_reader_interface.hpp>
+/// read rosbag2
 #include <rosbag2_cpp/readers/sequential_reader.hpp>
+#include <rosbag2_cpp/converter_interfaces/serialization_format_converter.hpp>
 #include <rosbag2_storage/storage_options.hpp>
-#define foreach BOOST_FOREACH*/
+#include <rclcpp/serialization.hpp>
+#include <rclcpp/rclcpp.hpp>
 
 /// ros message
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <sensor_msgs/msg/imu.hpp>
+#include <sensor_msgs/msg/point_cloud2.hpp>
+#include <velodyne_msgs/msg/velodyne_scan.hpp>
 
 #include <pcl_conversions/pcl_conversions.h> /// fromROSMsg toROSMsg
 
 #include <sensor_data/cloud_type.h>
 #include <sensor_data/imu_data.h>
+
+using SO3d = Sophus::SO3<double>;
 
 //#include <sensor_data/lidar_ouster.h>
 //#include <sensor_data/lidar_rs_16.h>
@@ -58,56 +60,116 @@ namespace liso {
 
 namespace IO {
 
-// TODO: Reimplement loadmsg function for rosbag2
-/*template <typename MsgType, typename MsgTypePtr>
+template <typename MsgType>
 inline bool loadmsg(const std::string bag_path, const std::string topic,
-                    std::vector<MsgTypePtr> &msgs, const double bag_start = 0,
-                    const double bag_durr = -1) {
-  rosbag::Bag bag;
-  bag.open(bag_path, rosbag::bagmode::Read);
-  std::vector<std::string> topics;
-  topics.push_back(topic);
-
-  rosbag::View view_full;
-  rosbag::View view;
-
-  // Start a few seconds in from the full view time
-  // If we have a negative duration then use the full bag length
-  view_full.addQuery(bag);
-  ros::Time time_init = view_full.getBeginTime();
-  time_init += ros::Duration(bag_start);
-  ros::Time time_finish = (bag_durr < 0) ? view_full.getEndTime()
-                                         : time_init + ros::Duration(bag_durr);
-  view.addQuery(bag, rosbag::TopicQuery(topics), time_init, time_finish);
-
-  // Check to make sure we have data to play
-  if (view.size() == 0) {
-    RCLCPP_ERROR(rclcpp::get_logger("dataset_reader"),
-                 "No messages to play on specified topics.  Exiting.");
-    rclcpp::shutdown();
-    return EXIT_FAILURE;
+                    std::vector<std::shared_ptr<MsgType>> &msgs, 
+                    const double bag_start = 0, const double bag_durr = -1) {
+  // Create rosbag2 reader
+  rosbag2_cpp::readers::SequentialReader reader;
+  rosbag2_storage::StorageOptions storage_options;
+  storage_options.uri = bag_path;
+  storage_options.storage_id = "sqlite3";
+  
+  rosbag2_cpp::ConverterOptions converter_options;
+  converter_options.input_serialization_format = "cdr";
+  converter_options.output_serialization_format = "cdr";
+  
+  try {
+    reader.open(storage_options, converter_options);
+  } catch (const std::exception& e) {
+    RCLCPP_ERROR(rclcpp::get_logger("dataset_reader"), 
+                 "Failed to open rosbag: %s", e.what());
+    return false;
   }
-
-  // Step through the rosbag
-  for (const rosbag::MessageInstance &m : view) {
-    // Handle IMU measurement
-    MsgTypePtr msgPtr = m.instantiate<MsgType>();
-    if (msgPtr != NULL) {
-      msgs.push_back(msgPtr);
+  
+  // Get topic metadata
+  auto topics_and_types = reader.get_all_topics_and_types();
+  bool topic_found = false;
+  for (const auto& topic_info : topics_and_types) {
+    if (topic_info.name == topic) {
+      topic_found = true;
+      break;
     }
   }
-
-  RCLCPP_INFO(rclcpp::get_logger("dataset_reader"), "load topic %s",
-              topic.c_str());
+  
+  if (!topic_found) {
+    RCLCPP_ERROR(rclcpp::get_logger("dataset_reader"),
+                 "Topic %s not found in bag file", topic.c_str());
+    return false;
+  }
+  
+  // Set up topic filter
+  rosbag2_storage::StorageFilter filter;
+  filter.topics.push_back(topic);
+  reader.set_filter(filter);
+  
+  // Time filtering variables
+  rclcpp::Time start_time_ros(0, 0, RCL_ROS_TIME);
+  rclcpp::Time end_time_ros(0, 0, RCL_ROS_TIME);
+  bool first_msg = true;
+  
+  // Serialization setup
+  rclcpp::Serialization<MsgType> serialization;
+  
+  // Read messages
+  while (reader.has_next()) {
+    auto bag_message = reader.read_next();
+    
+    if (bag_message->topic_name == topic) {
+      rclcpp::Time msg_time(bag_message->time_stamp);
+      
+      // Handle time filtering
+      if (first_msg) {
+        start_time_ros = msg_time;
+        if (bag_start > 0) {
+          start_time_ros = rclcpp::Time(start_time_ros.nanoseconds() + 
+                                       static_cast<int64_t>(bag_start * 1e9));
+        }
+        if (bag_durr > 0) {
+          end_time_ros = rclcpp::Time(start_time_ros.nanoseconds() + 
+                                     static_cast<int64_t>(bag_durr * 1e9));
+        }
+        first_msg = false;
+      }
+      
+      // Apply time filtering
+      if (bag_start > 0 && msg_time < start_time_ros) continue;
+      if (bag_durr > 0 && msg_time > end_time_ros) break;
+      
+      // Deserialize message
+      rclcpp::SerializedMessage serialized_msg(*bag_message->serialized_data);
+      auto msg = std::make_shared<MsgType>();
+      
+      try {
+        serialization.deserialize_message(&serialized_msg, msg.get());
+        msgs.push_back(msg);
+      } catch (const std::exception& e) {
+        RCLCPP_WARN(rclcpp::get_logger("dataset_reader"),
+                    "Failed to deserialize message: %s", e.what());
+        continue;
+      }
+    }
+  }
+  
+  reader.close();
+  
+  if (msgs.empty()) {
+    RCLCPP_ERROR(rclcpp::get_logger("dataset_reader"),
+                 "No messages found for topic %s", topic.c_str());
+    return false;
+  }
+  
+  RCLCPP_INFO(rclcpp::get_logger("dataset_reader"), "Loaded %zu messages from topic %s",
+              msgs.size(), topic.c_str());
   RCLCPP_INFO(rclcpp::get_logger("dataset_reader"),
-              "time start | end | duration= %.6f | %.6f | %.3f",
-              rclcpp::Time(msgs.at(0)->header.stamp).seconds(),
+              "Time start | end | duration = %.6f | %.6f | %.3f",
+              rclcpp::Time(msgs.front()->header.stamp).seconds(),
               rclcpp::Time(msgs.back()->header.stamp).seconds(),
               rclcpp::Time(msgs.back()->header.stamp).seconds() -
-                  rclcpp::Time(msgs.at(0)->header.stamp).seconds());
-
+                  rclcpp::Time(msgs.front()->header.stamp).seconds());
+  
   return true;
-}*/
+}
 
 class LioDataset {
 public:
@@ -156,17 +218,117 @@ public:
     }
   }
 
-  // TODO: Reimplement Read function for rosbag2
-  // Temporarily disabled for ROS2 migration
-  /*
   bool Read(const std::string path, const std::string imu_topic,
             const std::string lidar_topic, const double bag_start = -1.0,
             const double bag_durr = -1.0, const std::string vicon_topic = "") {
-    // Implementation commented out for ROS2 migration
-    // TODO: Reimplement using rosbag2 API
-    return false;
+    
+    Reset();
+    Init();
+    
+    RCLCPP_INFO(rclcpp::get_logger("dataset_reader"), 
+                "Reading rosbag2: %s", path.c_str());
+    RCLCPP_INFO(rclcpp::get_logger("dataset_reader"), 
+                "IMU topic: %s, LiDAR topic: %s", 
+                imu_topic.c_str(), lidar_topic.c_str());
+    
+    // Read IMU data
+    std::vector<sensor_msgs::msg::Imu::SharedPtr> imu_msgs;
+    if (!loadmsg<sensor_msgs::msg::Imu>(path, imu_topic, imu_msgs, bag_start, bag_durr)) {
+      RCLCPP_ERROR(rclcpp::get_logger("dataset_reader"), 
+                   "Failed to load IMU messages from topic: %s", imu_topic.c_str());
+      return false;
+    }
+    
+    // Convert IMU messages to internal format
+    for (const auto& imu_msg : imu_msgs) {
+      IMUData imu_data;
+      imu_data.timestamp = rclcpp::Time(imu_msg->header.stamp).seconds();
+      imu_data.gyro = Eigen::Vector3d(imu_msg->angular_velocity.x,
+                                      imu_msg->angular_velocity.y,
+                                      imu_msg->angular_velocity.z);
+      imu_data.accel = Eigen::Vector3d(imu_msg->linear_acceleration.x,
+                                       imu_msg->linear_acceleration.y,
+                                       imu_msg->linear_acceleration.z);
+      imu_data_.push_back(imu_data);
+    }
+    
+    // Read LiDAR data based on model type
+    bool lidar_success = false;
+    
+    if (lidar_model_ == VLP_16_packet) {
+      // Read Velodyne packet data
+      std::vector<velodyne_msgs::msg::VelodyneScan::SharedPtr> lidar_msgs;
+      if (loadmsg<velodyne_msgs::msg::VelodyneScan>(path, lidar_topic, lidar_msgs, bag_start, bag_durr)) {
+        for (const auto& scan_msg : lidar_msgs) {
+          LiDARFeature lidar_feature;
+          velodyne16_convert_->unpack_scan(scan_msg, lidar_feature);
+          scan_data_.push_back(lidar_feature);
+          scan_timestamps_.push_back(lidar_feature.timestamp);
+        }
+        lidar_success = true;
+      }
+    } 
+    else if (lidar_model_ == VLP_16_points || lidar_model_ == VLP_32E_points) {
+      // Read point cloud data
+      std::vector<sensor_msgs::msg::PointCloud2::SharedPtr> lidar_msgs;
+      if (loadmsg<sensor_msgs::msg::PointCloud2>(path, lidar_topic, lidar_msgs, bag_start, bag_durr)) {
+        if (lidar_model_ == VLP_16_points) {
+          for (const auto& cloud_msg : lidar_msgs) {
+            LiDARFeature lidar_feature;
+            vlp_point_convert_->get_organized_and_raw_cloud(cloud_msg, lidar_feature);
+            scan_data_.push_back(lidar_feature);
+            scan_timestamps_.push_back(lidar_feature.timestamp);
+          }
+        } else {
+          // VLP_32E_points - also use vlp_point_convert
+          for (const auto& cloud_msg : lidar_msgs) {
+            LiDARFeature lidar_feature;
+            vlp_point_convert_->get_organized_and_raw_cloud(cloud_msg, lidar_feature);
+            scan_data_.push_back(lidar_feature);
+            scan_timestamps_.push_back(lidar_feature.timestamp);
+          }
+        }
+        lidar_success = true;
+      }
+    }
+    
+    if (!lidar_success) {
+      RCLCPP_ERROR(rclcpp::get_logger("dataset_reader"), 
+                   "Failed to load LiDAR messages from topic: %s", lidar_topic.c_str());
+      return false;
+    }
+    
+    // Read Vicon data if topic is provided
+    if (!vicon_topic.empty()) {
+      std::vector<geometry_msgs::msg::TransformStamped::SharedPtr> vicon_msgs;
+      if (loadmsg<geometry_msgs::msg::TransformStamped>(path, vicon_topic, vicon_msgs, bag_start, bag_durr)) {
+        for (const auto& vicon_msg : vicon_msgs) {
+          PoseData pose_data;
+          pose_data.timestamp = rclcpp::Time(vicon_msg->header.stamp).seconds();
+          pose_data.position = Eigen::Vector3d(vicon_msg->transform.translation.x,
+                                               vicon_msg->transform.translation.y,
+                                               vicon_msg->transform.translation.z);
+          Eigen::Quaterniond quat(vicon_msg->transform.rotation.w,
+                                   vicon_msg->transform.rotation.x,
+                                   vicon_msg->transform.rotation.y,
+                                   vicon_msg->transform.rotation.z);
+          pose_data.orientation = SO3d(quat);
+          vicon_data_.push_back(pose_data);
+        }
+        RCLCPP_INFO(rclcpp::get_logger("dataset_reader"), 
+                    "Loaded %zu Vicon messages", vicon_data_.size());
+      } else {
+        RCLCPP_WARN(rclcpp::get_logger("dataset_reader"), 
+                    "Failed to load Vicon messages from topic: %s", vicon_topic.c_str());
+      }
+    }
+    
+    RCLCPP_INFO(rclcpp::get_logger("dataset_reader"), 
+                "Successfully loaded dataset: %zu IMU, %zu LiDAR messages",
+                imu_data_.size(), scan_data_.size());
+    
+    return true;
   }
-  */
 
   void AdjustIMUViconData() {
     assert(imu_data_.size() > 0 && "No IMU data. Check your bag and imu topic");
@@ -265,7 +427,7 @@ public:
   const std::vector<LiDARFeature> &get_scan_data() const { return scan_data_; }
 
 public:
-  // std::shared_ptr<rosbag::Bag> bag_; // TODO: Replace with rosbag2 equivalent
+  // rosbag2 reader - no need to store as member variable
 
   Eigen::aligned_vector<IMUData> imu_data_;
 

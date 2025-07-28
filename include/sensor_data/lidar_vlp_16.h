@@ -235,7 +235,7 @@ private:
     m_config.max_angle = 36000;
     // Set up cached values for sin and cos of all the possible headings
     for (uint16_t rot_index = 0; rot_index < ROTATION_MAX_UNITS; ++rot_index) {
-      float rotation = (ROTATION_RESOLUTION * rot_index) * M_PI / 180.0;
+      float rotation = angles::from_degrees(ROTATION_RESOLUTION * rot_index);
       cos_rot_table_[rot_index] = cosf(rotation);
       sin_rot_table_[rot_index] = sinf(rotation);
     }
