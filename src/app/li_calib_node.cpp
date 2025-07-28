@@ -22,17 +22,19 @@
 
 #include <calib/calib_helper.h>
 #include <pangolin/pangolin.h>
-#include <ros/package.h>
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
+#include <ament_index_cpp/get_package_share_directory.hpp>
 #include <trajectory/trajectory_viewer.h>
 #include <string>
+#include <memory>
 
 using namespace liso;
 
 class CalibUI : public LICalibrHelper {
  public:
-  CalibUI(const YAML::Node& config_node)
+  CalibUI(const YAML::Node& config_node, std::shared_ptr<rclcpp::Node> node)
       : LICalibrHelper(config_node),
+        node_(node),
         iteration_num_(1),
         pan_opt_time_offset_("ui.opt_time_offset", false, false, true),
         pan_opt_lidar_intrinsic_("ui.opt_lidar_intrinsic", false, false, true),
@@ -72,7 +74,7 @@ class CalibUI : public LICalibrHelper {
   }
 
   void RenderingLoop() {
-    while (!pangolin::ShouldQuit() && ros::ok()) {
+    while (!pangolin::ShouldQuit() && rclcpp::ok()) {
       glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
       this->calib_param_manager_->calib_option.opt_time_offset =
@@ -215,6 +217,7 @@ class CalibUI : public LICalibrHelper {
   }
 
  private:
+  std::shared_ptr<rclcpp::Node> node_;
   int iteration_num_;
 
   static constexpr int UI_WIDTH = 300;
@@ -226,21 +229,41 @@ class CalibUI : public LICalibrHelper {
 };
 
 int main(int argc, char** argv) {
-  ros::init(argc, argv, "li_calib_node");
-  ros::NodeHandle nh("~");
+  rclcpp::init(argc, argv);
+  
+  // Create node with private namespace
+  auto node = std::make_shared<rclcpp::Node>("li_calib_node");
 
-  liso::publisher::SetPublisher(nh);
+  // Initialize publisher
+  liso::publisher::SetPublisher(node);
 
-  std::string config_path;
-  nh.param<std::string>("config_path", config_path, "/config/li-calib.yaml");
+  // Get config path parameter
+  std::string config_path = node->declare_parameter<std::string>("config_path", "/config/li-calib.yaml");
 
+  // Get package path using ament_index
   std::string package_name = "oa_licalib";
-  std::string PACKAGE_PATH = ros::package::getPath(package_name);
+  std::string PACKAGE_PATH;
+  try {
+    PACKAGE_PATH = ament_index_cpp::get_package_share_directory(package_name);
+  } catch (const std::exception& e) {
+    RCLCPP_ERROR(node->get_logger(), "Failed to get package path for %s: %s", 
+                 package_name.c_str(), e.what());
+    rclcpp::shutdown();
+    return -1;
+  }
 
   std::string config_file_path = PACKAGE_PATH + config_path;
-  YAML::Node config_node = YAML::LoadFile(config_file_path);
+  YAML::Node config_node;
+  try {
+    config_node = YAML::LoadFile(config_file_path);
+  } catch (const std::exception& e) {
+    RCLCPP_ERROR(node->get_logger(), "Failed to load config file %s: %s", 
+                 config_file_path.c_str(), e.what());
+    rclcpp::shutdown();
+    return -1;
+  }
 
-  CalibUI calib_ui(config_node);
+  CalibUI calib_ui(config_node, node);
 
   bool use_gui = config_node["use_gui"].as<bool>();
   if (use_gui) {
@@ -250,4 +273,7 @@ int main(int argc, char** argv) {
     // calib_ui.Run();
     calib_ui.RunSimulation();
   }
+
+  rclcpp::shutdown();
+  return 0;
 }

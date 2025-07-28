@@ -21,6 +21,7 @@
  */
 
 #include <calib/calib_helper.h>
+#include <boost/filesystem.hpp>
 
 namespace liso {
 
@@ -106,7 +107,7 @@ void LICalibrHelper::LoadDataset(const YAML::Node& node) {
     lidar_model_type = LidarModelType::RS_16;
   } else {
     calib_step_ = Error;
-    ROS_WARN("LiDAR model %s not support yet.", lidar_model.c_str());
+    RCLCPP_WARN(rclcpp::get_logger("calib_helper"), "LiDAR model %s not support yet.", lidar_model.c_str());
   }
 
   segment_dataset_ =
@@ -140,12 +141,12 @@ bool LICalibrHelper::CheckCalibStep(CalibStep desired_step,
   static TicToc timer;
   static std::string last_func_name = "Start";
 
-  if (!ros::ok()) return false;
+  if (!rclcpp::ok()) return false;
 
   bool check_pass = true;
   if (calib_step_ != desired_step) {
     check_pass = false;
-    ROS_WARN("[%s] Need status: [%s].", func_name.c_str(),
+    RCLCPP_WARN(rclcpp::get_logger("calib_helper"), "[%s] Need status: [%s].", func_name.c_str(),
              step_descri[int(desired_step)].c_str());
   }
 
@@ -186,9 +187,9 @@ void LICalibrHelper::Initialization() {
     if (ret)
       calib_step_ = InitializationDone;
     else
-      ROS_WARN("[Initialization] fails.");
+      RCLCPP_WARN(rclcpp::get_logger("calib_helper"), "[Initialization] fails.");
   } else {
-    ROS_WARN("[Initialization] skip.");
+    RCLCPP_WARN(rclcpp::get_logger("calib_helper"), "[Initialization] skip.");
   }
 
   /// if initiailization fails, then use the prior

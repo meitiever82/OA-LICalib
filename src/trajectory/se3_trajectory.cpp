@@ -39,7 +39,8 @@ SE3d Trajectory::GetLidarPose(const double timestamp) const {
 
 bool Trajectory::GetLidarPose(const double timestamp, SE3d &lidar_pose) {
   double t = timestamp + this->GetTrajParam()->time_offset;
-  if (t < this->minTime() || t >= this->maxTime()) return false;
+  if (t < this->minTime() || t >= this->maxTime())
+    return false;
 
   SE3d pose_I_to_G = this->pose(t);
   SE3d pose_L_to_G = pose_I_to_G * calib_param_->se3_LtoI;
@@ -58,7 +59,7 @@ void Trajectory::UndistortScan(const PosCloud &scan_raw,
 
   std::size_t cnt = 0;
   for (auto const &raw_p : scan_raw.points) {
-    if (pcl_isnan(raw_p.x)) {
+    if (std::isnan(raw_p.x)) {
       scan_in_target.is_dense = false;
       std::cout << RED << "[UndistortScan] input cloud exists NAN point\n"
                 << RESET;
@@ -125,7 +126,7 @@ bool Trajectory::LoadTrajectoryControlPoints(std::string path) {
     std::vector<double> vec;
 
     while (std::getline(s, field, ' ')) {
-      if (field.empty())  // Skip if empty
+      if (field.empty()) // Skip if empty
         continue;
       // save the data to our vector
       vec.push_back(std::atof(field.c_str()));
@@ -188,4 +189,4 @@ void Trajectory::TrajectoryToTUMTxt2(std::string traj_path,
   std::cout << "Save trajectory at " << traj_path << std::endl;
 }
 
-}  // namespace liso
+} // namespace liso

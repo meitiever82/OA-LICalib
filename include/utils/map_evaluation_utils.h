@@ -188,7 +188,7 @@ class MapEvaluationTool {
         p.y = input_cloud->points[i].y;
         p.z = input_cloud->points[i].z;
 
-        if (pcl_isfinite(localPlaneVariance)) {
+        if (std::isfinite(localPlaneVariance)) {
           plane_variance_sum += localPlaneVariance;
           p.planeVariance = static_cast<float>(localPlaneVariance);
         } else {
@@ -200,7 +200,7 @@ class MapEvaluationTool {
             p.planeVariance = static_cast<float>(radius_);
           }
         }
-        if (pcl_isfinite(localEntropy)) {
+        if (std::isfinite(localEntropy)) {
           entropy_sum += localEntropy;
           p.entropy = static_cast<float>(localEntropy);
         } else {

@@ -24,28 +24,29 @@
 #define VELODYNE_CORRECTION_HPP
 
 #include <angles/angles.h>
-#include <pcl_ros/point_cloud.h>
-#include <ros/ros.h>
-#include <sensor_msgs/PointCloud2.h>
-#include <velodyne_msgs/VelodynePacket.h>
-#include <velodyne_msgs/VelodyneScan.h>
 #include <iostream>
+#include <pcl_conversions/pcl_conversions.h>
+#include <rclcpp/rclcpp.hpp>
+#include <sensor_msgs/msg/point_cloud2.hpp>
 #include <vector>
+#include <velodyne_msgs/msg/velodyne_packet.hpp>
+#include <velodyne_msgs/msg/velodyne_scan.hpp>
 
 #include <sensor_data/lidar_feature.h>
 
 namespace liso {
 
 class Velodyne16 {
- public:
+public:
   typedef std::shared_ptr<Velodyne16> Ptr;
 
   Velodyne16() { setParameters(); }
 
-  void unpack_scan(const velodyne_msgs::VelodyneScan::ConstPtr &lidarMsg,
-                   LiDARFeature &output) const {
+  void
+  unpack_scan(const velodyne_msgs::msg::VelodyneScan::ConstSharedPtr &lidarMsg,
+              LiDARFeature &output) const {
     output.Clear();
-    output.timestamp = lidarMsg->header.stamp.toSec();
+    output.timestamp = rclcpp::Time(lidarMsg->header.stamp).seconds();
 
     /// point cloud
     output.full_features->height = 16;
@@ -62,7 +63,7 @@ class Velodyne16 {
 
     int block_counter = 0;
 
-    double scan_timestamp = lidarMsg->header.stamp.toSec();
+    double scan_timestamp = rclcpp::Time(lidarMsg->header.stamp).seconds();
 
     float deg2rad_resolution = ROTATION_RESOLUTION / 180.0 * M_PI;
 
@@ -172,12 +173,13 @@ class Velodyne16 {
     }
   }
 
-  void unpack_scan(const sensor_msgs::PointCloud2::ConstPtr &lidarMsg,
-                   LiDARFeature &output) const {
+  void
+  unpack_scan(const sensor_msgs::msg::PointCloud2::ConstSharedPtr &lidarMsg,
+              LiDARFeature &output) const {
     VPointCloud pc_in;
     pcl::fromROSMsg(*lidarMsg, pc_in);
 
-    double timebase = lidarMsg->header.stamp.toSec();
+    double timebase = rclcpp::Time(lidarMsg->header.stamp).seconds();
     output.timestamp = timebase;
 
     /// point cloud
@@ -225,7 +227,7 @@ class Velodyne16 {
     return mVLP16TimeBlock[firing][dsr];
   }
 
- private:
+private:
   void setParameters() {
     m_config.max_range = 150;
     m_config.min_range = 1.0;
@@ -233,16 +235,16 @@ class Velodyne16 {
     m_config.max_angle = 36000;
     // Set up cached values for sin and cos of all the possible headings
     for (uint16_t rot_index = 0; rot_index < ROTATION_MAX_UNITS; ++rot_index) {
-      float rotation = angles::from_degrees(ROTATION_RESOLUTION * rot_index);
+      float rotation = (ROTATION_RESOLUTION * rot_index) * M_PI / 180.0;
       cos_rot_table_[rot_index] = cosf(rotation);
       sin_rot_table_[rot_index] = sinf(rotation);
     }
 
     FIRINGS_PER_BLOCK = 2;
     SCANS_PER_FIRING = 16;
-    BLOCK_TDURATION = 110.592f;  // [µs]
-    DSR_TOFFSET = 2.304f;        // [µs]
-    FIRING_TOFFSET = 55.296f;    // [µs]
+    BLOCK_TDURATION = 110.592f; // [µs]
+    DSR_TOFFSET = 2.304f;       // [µs]
+    FIRING_TOFFSET = 55.296f;   // [µs]
     PACKET_TIME = (BLOCKS_PER_PACKET * 2 * FIRING_TOFFSET);
 
     float vert_correction[16] = {
@@ -278,7 +280,7 @@ class Velodyne16 {
     for (unsigned int w = 0; w < 1824; w++) {
       for (unsigned int h = 0; h < 16; h++) {
         mVLP16TimeBlock[w][h] =
-            h * 2.304 * 1e-6 + w * 55.296 * 1e-6;  ///  16*1824
+            h * 2.304 * 1e-6 + w * 55.296 * 1e-6; ///  16*1824
       }
     }
   }
@@ -287,7 +289,7 @@ class Velodyne16 {
     return (range >= m_config.min_range && range <= m_config.max_range);
   }
 
- private:
+private:
   static const int RAW_SCAN_SIZE = 3;
   static const int SCANS_PER_BLOCK = 32;
   static const int BLOCK_DATA_SIZE = (SCANS_PER_BLOCK * RAW_SCAN_SIZE);
@@ -316,8 +318,8 @@ class Velodyne16 {
   int scan_mapping_16[16];
 
   typedef struct raw_block {
-    uint16_t header;    ///< UPPER_BANK or LOWER_BANK
-    uint16_t rotation;  ///< 0-35999, divide by 100 to get degrees
+    uint16_t header;   ///< UPPER_BANK or LOWER_BANK
+    uint16_t rotation; ///< 0-35999, divide by 100 to get degrees
     uint8_t data[BLOCK_DATA_SIZE];
   } raw_block_t;
 
@@ -339,16 +341,16 @@ class Velodyne16 {
 
   /** configuration parameters */
   typedef struct {
-    double max_range;  ///< maximum range to publish
+    double max_range; ///< maximum range to publish
     double min_range;
-    int min_angle;  ///< minimum angle to publish
-    int max_angle;  ///< maximum angle to publish
+    int min_angle; ///< minimum angle to publish
+    int max_angle; ///< maximum angle to publish
   } Config;
   Config m_config;
 
   double mVLP16TimeBlock[1824][16];
 };
 
-}  // namespace liso
+} // namespace liso
 
 #endif

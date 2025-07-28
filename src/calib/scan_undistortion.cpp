@@ -29,9 +29,9 @@ namespace liso {
 /// [improve NDT accuracy] remove rotaional motion distortion
 void ScanUndistortion::UndistortScan(
     std::shared_ptr<Trajectory> trajectory,
-    const std::vector<LiDARFeature>& scan_data_raw, bool correct_position) {
+    const std::vector<LiDARFeature> &scan_data_raw, bool correct_position) {
   scan_data_.clear();
-  for (const LiDARFeature& scan_raw : scan_data_raw) {
+  for (const LiDARFeature &scan_raw : scan_data_raw) {
     double scan_timestamp = scan_raw.timestamp;
     SE3d pose = trajectory->GetLidarPose(scan_timestamp);
     Eigen::Quaterniond q_L0_to_G = pose.unit_quaternion();
@@ -52,7 +52,7 @@ void ScanUndistortion::UndistortScan(
 /// transfrom scna data to map frame and build map based on trajectory
 void ScanUndistortion::UndistortScanInMap(
     std::shared_ptr<Trajectory> trajectory,
-    const std::vector<LiDARFeature>& scan_data_raw, bool correct_position) {
+    const std::vector<LiDARFeature> &scan_data_raw, bool correct_position) {
   scan_data_in_map_.clear();
   map_cloud_ = PosCloud::Ptr(new PosCloud);
 
@@ -70,10 +70,11 @@ void ScanUndistortion::UndistortScanInMap(
       trajectory->GetCalibParam()->lo_param.ndt_key_frame_downsample;
 
   int cnt = 0;
-  for (const LiDARFeature& scan_raw : scan_data_raw) {
+  for (const LiDARFeature &scan_raw : scan_data_raw) {
     // if (cnt++ % 3 != 0) continue;
     double scan_timestamp = scan_raw.timestamp;
-    if (!trajectory->GetLiDARTrajQuality(scan_timestamp)) continue;
+    if (!trajectory->GetLiDARTrajQuality(scan_timestamp))
+      continue;
     PosCloud::Ptr scan_in_target(new PosCloud);
     if (apply_lidar_intrinstic) {
       Undistort(trajectory, q_L0_to_G.conjugate(), p_L0_in_G,
@@ -98,8 +99,9 @@ void ScanUndistortion::UndistortScanInMap(
     DownsampleCloud(scan_in_target, scan_in_target_ds, filter_voxel_size);
 #else
     for (int k = 0; k < scan_in_target->size(); k += 3) {
-      const auto& p_in = scan_in_target->points[k];
-      if (pcl_isnan(p_in.x)) continue;
+      const auto &p_in = scan_in_target->points[k];
+      if (std::isnan(p_in.x))
+        continue;
 
       PosPoint p;
       p.x = p_in.x;
@@ -115,11 +117,11 @@ void ScanUndistortion::UndistortScanInMap(
 
 //  transfrom scna data to map frame based on the lidar odometry
 void ScanUndistortion::UndistortScanInMap(
-    const Eigen::aligned_vector<OdomData>& odom_data) {
+    const Eigen::aligned_vector<OdomData> &odom_data) {
   scan_data_in_map_.clear();
   map_cloud_ = PosCloud::Ptr(new PosCloud);
 
-  for (auto const& odom : odom_data) {
+  for (auto const &odom : odom_data) {
     auto iter = scan_data_.find(odom.timestamp);
     if (iter == scan_data_.end()) {
       continue;
@@ -138,12 +140,12 @@ void ScanUndistortion::UndistortScanInMap(
 }
 
 void ScanUndistortion::Undistort(std::shared_ptr<Trajectory> trajectory,
-                                 const Eigen::Quaterniond& q_G_to_target,
-                                 const Eigen::Vector3d& p_target_in_G,
-                                 const PosCloud::Ptr& scan_raw,
-                                 PosCloud::Ptr& scan_in_target,
+                                 const Eigen::Quaterniond &q_G_to_target,
+                                 const Eigen::Vector3d &p_target_in_G,
+                                 const PosCloud::Ptr &scan_raw,
+                                 PosCloud::Ptr &scan_in_target,
                                  bool correct_position,
-                                 const PosCloud::Ptr& scan_raw_measure) const {
+                                 const PosCloud::Ptr &scan_raw_measure) const {
   scan_in_target->header = scan_raw->header;
   scan_in_target->height = scan_raw->height;
   scan_in_target->width = scan_raw->width;
@@ -164,7 +166,7 @@ void ScanUndistortion::Undistort(std::shared_ptr<Trajectory> trajectory,
   for (int h = 0; h < scan_raw->height; h++) {
     for (int w = 0; w < scan_raw->width; w++) {
       PosPoint vpoint;
-      if (pcl_isnan(scan_raw->at(w, h).x)) {
+      if (std::isnan(scan_raw->at(w, h).x)) {
         vpoint = NanPoint;
         scan_in_target->at(w, h) = vpoint;
         continue;
@@ -172,7 +174,8 @@ void ScanUndistortion::Undistort(std::shared_ptr<Trajectory> trajectory,
       double point_timestamp = scan_raw->at(w, h).timestamp;
 
       SE3d point_pose;
-      if (!trajectory->GetLidarPose(point_timestamp, point_pose)) continue;
+      if (!trajectory->GetLidarPose(point_timestamp, point_pose))
+        continue;
       Eigen::Quaterniond q_Lk_to_G = point_pose.unit_quaternion();
       Eigen::Vector3d p_Lk_in_G = point_pose.translation();
 
@@ -206,4 +209,4 @@ void ScanUndistortion::Undistort(std::shared_ptr<Trajectory> trajectory,
   }
 }
 
-}  // namespace liso
+} // namespace liso

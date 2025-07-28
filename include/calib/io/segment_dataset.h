@@ -76,9 +76,11 @@ class SegmentDatasetManager {
 
       std::shared_ptr<liso::IO::LioDataset> dataset_reader;
       dataset_reader = std::make_shared<liso::IO::LioDataset>(lidar_model);
-      dataset_reader->Read(bag_path, topic_imu, topic_lidar, bag_start,
-                           bag_durr);
-      dataset_reader->AdjustDatasetTime();
+      // TODO: Re-enable rosbag reading for ROS2
+      // dataset_reader->Read(bag_path, topic_imu, topic_lidar, bag_start,
+      //                      bag_durr);
+      // dataset_reader->AdjustDatasetTime();
+      std::cout << "Warning: Rosbag reading currently disabled for ROS2 migration" << std::endl;
 
       AddSegmentData(dataset_reader);
     }

@@ -25,35 +25,32 @@
 namespace liso {
 
 namespace publisher {
-ros::Publisher pub_trajectory_raw_;
-ros::Publisher pub_trajectory_est_;
-ros::Publisher pub_imu_raw_array_;
-ros::Publisher pub_imu_est_array_;
-ros::Publisher pub_target_cloud_;
-ros::Publisher pub_source_cloud_;
+rclcpp::Publisher<oa_licalib::msg::PoseArray>::SharedPtr pub_trajectory_raw_;
+rclcpp::Publisher<oa_licalib::msg::PoseArray>::SharedPtr pub_trajectory_est_;
+rclcpp::Publisher<oa_licalib::msg::ImuArray>::SharedPtr pub_imu_raw_array_;
+rclcpp::Publisher<oa_licalib::msg::ImuArray>::SharedPtr pub_imu_est_array_;
+rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_target_cloud_;
+rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_source_cloud_;
 
-ros::Publisher pub_spline_trajectory_;
-ros::Publisher pub_lidar_trajectory_;
+rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr pub_spline_trajectory_;
+rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr pub_lidar_trajectory_;
 
-void SetPublisher(ros::NodeHandle &nh) {
+void SetPublisher(std::shared_ptr<rclcpp::Node> node) {
   /// Vicon data
-  pub_trajectory_raw_ = nh.advertise<oa_licalib::pose_array>("/path_raw", 10);
-  pub_trajectory_est_ = nh.advertise<oa_licalib::pose_array>("/path_est", 10);
+  pub_trajectory_raw_ = node->create_publisher<oa_licalib::msg::PoseArray>("/path_raw", 10);
+  pub_trajectory_est_ = node->create_publisher<oa_licalib::msg::PoseArray>("/path_est", 10);
   /// IMU fitting results
-  pub_imu_raw_array_ = nh.advertise<oa_licalib::imu_array>("/imu_raw_array", 10);
-  pub_imu_est_array_ = nh.advertise<oa_licalib::imu_array>("/imu_est_array", 10);
+  pub_imu_raw_array_ = node->create_publisher<oa_licalib::msg::ImuArray>("/imu_raw_array", 10);
+  pub_imu_est_array_ = node->create_publisher<oa_licalib::msg::ImuArray>("/imu_est_array", 10);
   /// lidar matching results
-  pub_target_cloud_ =
-      nh.advertise<sensor_msgs::PointCloud2>("/target_cloud", 10);
-  pub_source_cloud_ =
-      nh.advertise<sensor_msgs::PointCloud2>("/source_cloud", 10);
+  pub_target_cloud_ = node->create_publisher<sensor_msgs::msg::PointCloud2>("/target_cloud", 10);
+  pub_source_cloud_ = node->create_publisher<sensor_msgs::msg::PointCloud2>("/source_cloud", 10);
 
   /// spline trajectory
-  pub_spline_trajectory_ =
-      nh.advertise<nav_msgs::Path>("/spline_trajectory", 10);
+  pub_spline_trajectory_ = node->create_publisher<nav_msgs::msg::Path>("/spline_trajectory", 10);
 
-  /// spline trajectory
-  pub_lidar_trajectory_ = nh.advertise<nav_msgs::Path>("/lidar_trajectory", 10);
+  /// lidar trajectory
+  pub_lidar_trajectory_ = node->create_publisher<nav_msgs::msg::Path>("/lidar_trajectory", 10);
 }
 
 }  // namespace publisher

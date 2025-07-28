@@ -101,7 +101,7 @@ class LieLocalParameterization : public ceres::LocalParameterization {
     Eigen::Map<Eigen::Matrix<double, Groupd::num_parameters, Groupd::DoF,
                              Eigen::RowMajor>>
         jacobian(jacobian_raw);
-    jacobian = T.Dx_this_mul_exp_x_at_0().transpose();
+    jacobian = T.Dx_this_mul_exp_x_at_0();
     return true;
   }
 
