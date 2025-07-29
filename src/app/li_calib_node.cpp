@@ -20,22 +20,20 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <ament_index_cpp/get_package_share_directory.hpp>
 #include <calib/calib_helper.h>
+#include <memory>
 #include <pangolin/pangolin.h>
 #include <rclcpp/rclcpp.hpp>
-#include <ament_index_cpp/get_package_share_directory.hpp>
-#include <trajectory/trajectory_viewer.h>
 #include <string>
-#include <memory>
+#include <trajectory/trajectory_viewer.h>
 
 using namespace liso;
 
 class CalibUI : public LICalibrHelper {
- public:
-  CalibUI(const YAML::Node& config_node, std::shared_ptr<rclcpp::Node> node)
-      : LICalibrHelper(config_node),
-        node_(node),
-        iteration_num_(1),
+public:
+  CalibUI(const YAML::Node &config_node, std::shared_ptr<rclcpp::Node> node)
+      : LICalibrHelper(config_node), node_(node), iteration_num_(1),
         pan_opt_time_offset_("ui.opt_time_offset", false, false, true),
         pan_opt_lidar_intrinsic_("ui.opt_lidar_intrinsic", false, false, true),
         pan_opt_imu_intrinsic_("ui.opt_imu_intrinsic", false, false, true),
@@ -206,17 +204,17 @@ class CalibUI : public LICalibrHelper {
     int order[16] = {15, 13, 11, 9, 7, 5, 3, 1, 14, 12, 10, 8, 6, 4, 2, 0};
     for (size_t dsr = 0; dsr < 16; dsr++) {
       std::vector<double> v = laser_param_vec.at(order[dsr]);
-      lidar_file << v[0] << ","               //
-                 << v[1] * 1000 << ","        //
-                 << v[2] * 1000 << ","        //
-                 << v[3] * 1000 << ","        //
-                 << v[4] * 180 / M_PI << ","  //
+      lidar_file << v[0] << ","              //
+                 << v[1] * 1000 << ","       //
+                 << v[2] * 1000 << ","       //
+                 << v[3] * 1000 << ","       //
+                 << v[4] * 180 / M_PI << "," //
                  << v[5] * 180 / M_PI << std::endl;
     }
     lidar_file.close();
   }
 
- private:
+private:
   std::shared_ptr<rclcpp::Node> node_;
   int iteration_num_;
 
@@ -228,9 +226,9 @@ class CalibUI : public LICalibrHelper {
   pangolin::Var<bool> pan_apply_lidar_intrinstic_;
 };
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
   rclcpp::init(argc, argv);
-  
+
   // Create node with private namespace
   auto node = std::make_shared<rclcpp::Node>("li_calib_node");
 
@@ -238,15 +236,18 @@ int main(int argc, char** argv) {
   liso::publisher::SetPublisher(node);
 
   // Get config path parameter
-  std::string config_path = node->declare_parameter<std::string>("config_path", "/config/li-calib.yaml");
-
+  std::string config_path = node->declare_parameter<std::string>(
+      "config_path", "/config/li-calib.yaml");
+  if (!config_path.empty() && config_path.substr(0, 1) != "/") {
+    config_path = "/" + config_path;
+  }
   // Get package path using ament_index
   std::string package_name = "oa_licalib";
   std::string PACKAGE_PATH;
   try {
     PACKAGE_PATH = ament_index_cpp::get_package_share_directory(package_name);
-  } catch (const std::exception& e) {
-    RCLCPP_ERROR(node->get_logger(), "Failed to get package path for %s: %s", 
+  } catch (const std::exception &e) {
+    RCLCPP_ERROR(node->get_logger(), "Failed to get package path for %s: %s",
                  package_name.c_str(), e.what());
     rclcpp::shutdown();
     return -1;
@@ -256,8 +257,8 @@ int main(int argc, char** argv) {
   YAML::Node config_node;
   try {
     config_node = YAML::LoadFile(config_file_path);
-  } catch (const std::exception& e) {
-    RCLCPP_ERROR(node->get_logger(), "Failed to load config file %s: %s", 
+  } catch (const std::exception &e) {
+    RCLCPP_ERROR(node->get_logger(), "Failed to load config file %s: %s",
                  config_file_path.c_str(), e.what());
     rclcpp::shutdown();
     return -1;
