@@ -52,7 +52,8 @@ find_package(OpenCV REQUIRED)
 find_package(yaml-cpp REQUIRED)
 
 # Set up Ceres (use system installation)
-find_package(Ceres REQUIRED)
+find_package(Ceres 2.1 REQUIRED)
+message(STATUS "Found Ceres version: ${CERES_VERSION}")
 
 # Set up Pangolin (use system installation)
 find_package(Pangolin REQUIRED)
