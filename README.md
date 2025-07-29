@@ -9,7 +9,7 @@
 - Others (Sophus, ceres, Pangolin have been included in the gitsubmodule)
 
   ```shell
-  sudo apt-get install ros-melodic-velodyne-msgs
+  sudo apt-get install ros-humble-velodyne-msgs
   sudo apt-get install libpcap-dev
   sudo apt-get install ccache
   sudo apt-get install libyaml-cpp-dev 
