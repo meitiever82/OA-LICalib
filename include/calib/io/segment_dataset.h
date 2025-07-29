@@ -94,6 +94,7 @@ public:
       std::cout << "\t-segment [" << i
                 << "] : imu/lidar = " << segment_dataset_vec_[i].imu_data.size()
                 << "/" << segment_dataset_vec_[i].scan_timestamps.size()
+                << std::fixed << std::setprecision(9)
                 << "; start/end_time = " << segment_dataset_vec_[i].start_time
                 << "/" << segment_dataset_vec_[i].end_time << "\n";
     }

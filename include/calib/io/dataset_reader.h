@@ -64,7 +64,7 @@ class LioDataset {
 public:
   LioDataset(LidarModelType lidar_model) : lidar_model_(lidar_model) {}
 
-  void Init() {
+  void setConverterByLidarModel() {
     velodyne16_convert_ = nullptr;
     vlp_point_convert_ = nullptr;
 
@@ -94,7 +94,7 @@ public:
             const double bag_durr = -1.0, const std::string vicon_topic = "") {
 
     Reset();
-    Init();
+    setConverterByLidarModel();
 
     RCLCPP_INFO(rclcpp::get_logger("dataset_reader"), "Reading rosbag2: %s",
                 path.c_str());

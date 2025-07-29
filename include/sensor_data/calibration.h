@@ -26,19 +26,19 @@
 #define _USE_MATH_DEFINES
 #include <cmath>
 
-#include <rclcpp/rclcpp.hpp>
-#include <tf2/LinearMath/Quaternion.h>
-#include <tf2/LinearMath/Matrix3x3.h>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <Eigen/Eigen>
 #include <fstream>
 #include <memory>
+#include <rclcpp/rclcpp.hpp>
+#include <tf2/LinearMath/Matrix3x3.h>
+#include <tf2/LinearMath/Quaternion.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
 #include <sensor_data/cloud_type.h>
 #include <sensor_data/imu_data.h>
 #include <sensor_data/scaled_misaligned_imu.h>
-#include <utils/yaml_utils.h>
 #include <utils/eigen_utils.hpp>
+#include <utils/yaml_utils.h>
 
 #include <factor/auto_diff/imu_factor.h>
 #include <factor/auto_diff/lidar_feature_factor.h>
@@ -58,11 +58,9 @@ namespace liso {
 
 struct SegmentCalibParam {
   SegmentCalibParam()
-      : g_refine(Eigen::Vector2d(0, 0)),
-        gyro_bias(Eigen::Vector3d(0, 0, 0)),
+      : g_refine(Eigen::Vector2d(0, 0)), gyro_bias(Eigen::Vector3d(0, 0, 0)),
         acce_bias(Eigen::Vector3d(0, 0, 0)),
-        gravity(Eigen::Vector3d(0, 0, GRAVITY_NORM)),
-        time_offset(0) {}
+        gravity(Eigen::Vector3d(0, 0, GRAVITY_NORM)), time_offset(0) {}
 
   Eigen::Vector2d g_refine;
 
@@ -77,8 +75,8 @@ struct SegmentCalibParam {
 
 struct NDTLocatorParam {
   NDTLocatorParam()
-      : ndt_prior_map_path(""),
-        locator_init_pose(Eigen::Matrix4d::Identity()) {}
+      : ndt_prior_map_path(""), locator_init_pose(Eigen::Matrix4d::Identity()) {
+  }
 
   std::string ndt_prior_map_path;
   Eigen::Matrix4d locator_init_pose;
@@ -93,7 +91,7 @@ struct LiDAROdomParam {
 
   LiDAROdomParam() {}
 
-  LiDAROdomParam(const YAML::Node& node) {
+  LiDAROdomParam(const YAML::Node &node) {
     ndt_resolution = node["ndtResolution"].as<double>();
     ndt_key_frame_downsample = node["ndt_key_frame_downsample"].as<double>();
     map_downsample_size = node["map_downsample_size"].as<double>();
@@ -105,13 +103,13 @@ struct LiDAROdomParam {
 struct CalibWeights {
   CalibWeights() {}
 
-  CalibWeights(const YAML::Node& config_node) {
+  CalibWeights(const YAML::Node &config_node) {
     /// estimate weight param
-    opt_gyro_weight = config_node["gyro_weight"].as<double>();   // 28.0;
-    opt_acce_weight = config_node["accel_weight"].as<double>();  // 18.5;
+    opt_gyro_weight = config_node["gyro_weight"].as<double>();  // 28.0;
+    opt_acce_weight = config_node["accel_weight"].as<double>(); // 18.5;
 
     if (config_node["lidar_weight"])
-      opt_lidar_weight = config_node["lidar_weight"].as<double>();  // 10.0;
+      opt_lidar_weight = config_node["lidar_weight"].as<double>(); // 10.0;
   }
 
   /// weight
@@ -125,14 +123,11 @@ struct CalibWeights {
 struct CalibOptions {
   CalibOptions() {}
 
-  CalibOptions(const YAML::Node& node) {
+  CalibOptions(const YAML::Node &node) {
     is_plane_motion = node["plane_motion"].as<bool>();
-
     opt_time_offset = node["opt_timeoffset"].as<bool>();
     time_offset_padding = node["timeoffset_padding"].as<double>();
-
     lock_opt_first_accel_bias = node["lock_accel_bias"].as<bool>();
-
     opt_lidar_intrinsic = node["opt_lidar_intrinsic"].as<bool>();
     opt_IMU_intrinsic = node["opt_IMU_intrinsic"].as<bool>();
 
@@ -156,11 +151,11 @@ struct CalibOptions {
 };
 
 class CalibParamManager {
- public:
+public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   typedef std::shared_ptr<CalibParamManager> Ptr;
 
-  CalibParamManager(const YAML::Node& config_node)
+  CalibParamManager(const YAML::Node &config_node)
       : p_LinI(Eigen::Vector3d(0, 0, 0)),
         q_LtoI(Eigen::Quaterniond::Identity()) {
     lo_param = LiDAROdomParam(config_node);
@@ -169,7 +164,7 @@ class CalibParamManager {
 
     int segment_num = config_node["segment_num"].as<int>();
 
-    const YAML::Node& segment_node = config_node["selected_segment"];
+    const YAML::Node &segment_node = config_node["selected_segment"];
     for (int i = 0; i < segment_num; i++) {
       std::pair<double, double> segment_t;
       segment_t.first = segment_node[i]["start_time"].as<double>();
@@ -184,7 +179,8 @@ class CalibParamManager {
         std::vector<double> rpyxyz_vec;
         yaml::GetValues<double>(segment_node[i], "locator_init_rpyxyz_pose", 6,
                                 rpyxyz_vec);
-        for (int i = 0; i < 3; ++i) rpyxyz_vec[i] *= (M_PI / 180.);
+        for (int i = 0; i < 3; ++i)
+          rpyxyz_vec[i] *= (M_PI / 180.);
 
         tf2::Quaternion quat;
         quat.setRPY(rpyxyz_vec[0], rpyxyz_vec[1], rpyxyz_vec[2]);
@@ -267,7 +263,7 @@ class CalibParamManager {
   }
 
   // ========================= Visualization ========================= //
-  static void friendly_output(const Eigen::VectorXd& data, const int dim,
+  static void friendly_output(const Eigen::VectorXd &data, const int dim,
                               const std::string description,
                               int precision = 2) {
     std::cout << std::fixed << std::setprecision(precision);
@@ -311,7 +307,8 @@ class CalibParamManager {
       friendly_output(segment_param[i].gyro_bias, 3, "gyro bias", 4);
     }
 
-    if (calib_option.opt_lidar_intrinsic) lidar_intrinsic.ShowLaserParam();
+    if (calib_option.opt_lidar_intrinsic)
+      lidar_intrinsic.ShowLaserParam();
 
     if (calib_option.opt_IMU_intrinsic) {
       imu_intrinsic.ShowIMUParam();
@@ -326,7 +323,7 @@ class CalibParamManager {
 
     // for(size_t i = 0; i < segment_param.size(); i++)
     {
-      auto& v = segment_param[0];
+      auto &v = segment_param[0];
       std::pair<double, double> segment_t = segment_timestamp.at(0);
 
       ss << segment_t.first << "," << segment_t.second << "," << p_IinL(0)
@@ -344,7 +341,7 @@ class CalibParamManager {
     return param_info;
   }
 
- public:
+public:
   LiDAROdomParam lo_param;
 
   CalibWeights calib_weights;
@@ -367,6 +364,6 @@ class CalibParamManager {
   IMUIntrinsic imu_intrinsic;
 };
 
-}  // namespace liso
+} // namespace liso
 
 #endif
