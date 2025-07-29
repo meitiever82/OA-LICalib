@@ -4,12 +4,12 @@
 
 ## Prerequisites
 
-- [ROS](http://wiki.ros.org/ROS/Installation) (tested with Melodic)
+- [ROS 2](https://docs.ros.org/en/humble/Installation.html) (tested with Humble)
 
-- Others (Sophus, ceres, Pangolin have been included in the gitsubmodule)
+- Others (Sophus, ceres, Pangolin need to be installed separately)
 
   ```shell
-  sudo apt-get install ros-humble-velodyne-msgs
+  sudo apt-get install ros-humble-velodyne-msgs ros-humble-angles
   sudo apt-get install libpcap-dev
   sudo apt-get install ccache
   sudo apt-get install libyaml-cpp-dev 
@@ -19,27 +19,20 @@
 
 ```
 # init ROS workspace
-mkdir -p ~/catkin_oa_calib/src
-cd ~/catkin_oa_calib/src
-catkin_init_workspace
+mkdir -p ~/calib_ws/src
+cd ~/calib_ws/src
 
 # Clone the source code for the project and build it. 
-git clone https://github.com/APRIL-ZJU/OA-LICalib.git
-
-# ndt_omp, ros_rslidar
-wstool init
-wstool merge OA-LICalib/depend_pack.rosinstall
-wstool update
+git clone https://github.com/meitiever82/ndt_omp.git -b ros2
+git clone https://github.com/meitiever82/OA-LICalib.git -b ros2
 
 # thirdparty
-cd OA-LICalib
-./build_submodules.sh
+make sure you have installed Sophus, ceres, Pangolin
 
 ## build
-cd ../..
-catkin_make -DCATKIN_WHITELIST_PACKAGES="ndt_omp"
-catkin_make -DCATKIN_WHITELIST_PACKAGES=""
-source ./devel/setup.bash
+cd ~/calib_ws
+colcon build --packages-select oa_licalib ndt_omp
+source install/setup.bash
 ```
 
 ## Intrinsic and Extrinsic Calibration
@@ -58,7 +51,7 @@ euler_LtoI [1.0, 2.0, 5.0] degree
 Check the  parameter `path_bag` in the `config/simu.yaml`, **change it to your absolute path**. Then run it!
 
 ```shell
-roslaunch oa_licalib li_calib.launch
+ros2 launch oa_licalib li_calib.launch.py
 ```
 
 After completing calibration, run the following script to check the calibration result.
