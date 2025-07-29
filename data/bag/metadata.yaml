@@ -1,0 +1,57 @@
+rosbag2_bagfile_information:
+  compression_format: ''
+  compression_mode: ''
+  custom_data: {}
+  duration:
+    nanoseconds: 7067500115
+  files:
+  - duration:
+      nanoseconds: 7067500115
+    message_count: 6501
+    path: output_ros2.db3
+    starting_time:
+      nanoseconds_since_epoch: 1617008124000472307
+  message_count: 6501
+  relative_file_paths:
+  - output_ros2.db3
+  ros_distro: rosbags
+  starting_time:
+    nanoseconds_since_epoch: 1617008124000472307
+  storage_identifier: sqlite3
+  topics_with_message_count:
+  - message_count: 2827
+    topic_metadata:
+      name: /odom_imu
+      offered_qos_profiles: ''
+      serialization_format: cdr
+      type: nav_msgs/msg/Odometry
+      type_description_hash: RIHS01_3cc97dc7fb7502f8714462c526d369e35b603cfc34d946e3f2eda2766dfec6e0
+  - message_count: 2827
+    topic_metadata:
+      name: /imu_sim
+      offered_qos_profiles: ''
+      serialization_format: cdr
+      type: sensor_msgs/msg/Imu
+      type_description_hash: RIHS01_7d9a00ff131080897a5ec7e26e315954b8eae3353c3f995c55faf71574000b5b
+  - message_count: 707
+    topic_metadata:
+      name: /odom_vicon
+      offered_qos_profiles: ''
+      serialization_format: cdr
+      type: nav_msgs/msg/Odometry
+      type_description_hash: RIHS01_3cc97dc7fb7502f8714462c526d369e35b603cfc34d946e3f2eda2766dfec6e0
+  - message_count: 70
+    topic_metadata:
+      name: /scan_sim
+      offered_qos_profiles: ''
+      serialization_format: cdr
+      type: sensor_msgs/msg/PointCloud2
+      type_description_hash: RIHS01_9198cabf7da3796ae6fe19c4cb3bdd3525492988c70522628af5daa124bae2b5
+  - message_count: 70
+    topic_metadata:
+      name: /odom_lidar
+      offered_qos_profiles: ''
+      serialization_format: cdr
+      type: nav_msgs/msg/Odometry
+      type_description_hash: RIHS01_3cc97dc7fb7502f8714462c526d369e35b603cfc34d946e3f2eda2766dfec6e0
+  version: 8
