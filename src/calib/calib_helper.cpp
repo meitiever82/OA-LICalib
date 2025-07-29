@@ -120,14 +120,26 @@ void LICalibrHelper::LoadDataset(const YAML::Node &node) {
 
 bool LICalibrHelper::CreateCacheFolder(const std::string &bag_path) {
   boost::filesystem::path p(bag_path);
-  if (p.extension() != ".bag") {
-    return false;
+
+  // Check if it's a ROS2 bag (directory with metadata.yaml)
+  if (boost::filesystem::is_directory(p)) {
+    boost::filesystem::path metadata_file = p / "metadata.yaml";
+    if (boost::filesystem::exists(metadata_file)) {
+      // ROS2 bag format
+      cache_path_parent_ = p.parent_path().string();
+      cache_path_ =
+          p.parent_path().string() + "/" + p.filename().string() + "_cache";
+      boost::filesystem::create_directory(cache_path_);
+      bag_name_ = p.filename().string();
+      return true;
+    }
   }
-  cache_path_parent_ = p.parent_path().string();
-  cache_path_ = p.parent_path().string() + "/" + p.stem().string();
-  boost::filesystem::create_directory(cache_path_);
-  bag_name_ = p.stem().string();
-  return true;
+
+  RCLCPP_ERROR(
+      rclcpp::get_logger("calib_helper"),
+      "Invalid bag path: %s. Expected ROS2 bag directory or ROS1 .bag file.",
+      bag_path.c_str());
+  return false;
 }
 
 bool LICalibrHelper::CheckCalibStep(CalibStep desired_step,
