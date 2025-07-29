@@ -198,7 +198,7 @@ void LICalibrHelper::Initialization() {
   if (!calib_param_manager_->calib_option.is_plane_motion) {
     bool ret = CalibTool::EstimateRotation(
         segment_dataset_->GetImuData(0), segment_dataset_->GetScanData(0),
-        trajectory_vec_.at(0), calib_param_manager_);
+        trajectory_vec_.at(0), calib_param_manager_, ros_node_);
     if (ret)
       calib_step_ = InitializationDone;
     else
@@ -235,7 +235,7 @@ void LICalibrHelper::DataAssociationInOdom() {
         segment_dataset_->GetScanTimestamps(id),
         segment_dataset_->GetSegmentTimestamp().at(id), trajectory_vec_.at(id),
         calib_param_manager_, scan_undistortion_vec_.at(id),
-        surfel_association_vec_.at(id), cache_path_);
+        surfel_association_vec_.at(id), cache_path_, ros_node_);
 
     full_ret = full_ret && seg_ret;
 

@@ -31,21 +31,22 @@
 #include <sensor_data/cloud_type.h>
 #include <sensor_data/imu_data.h>
 #include <sensor_data/lidar_feature.h>
-#include <utils/math_utils.h>
 #include <utils/eigen_utils.hpp>
+#include <utils/math_utils.h>
 
+#include <nav_msgs/msg/odometry.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
-#include <nav_msgs/msg/odometry.hpp>
 
 namespace liso {
 
 class LidarNdtOdometry {
- public:
+public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   typedef std::shared_ptr<LidarNdtOdometry> Ptr;
 
-  explicit LidarNdtOdometry(double ndt_resolution = 0.5,
+  explicit LidarNdtOdometry(rclcpp::Node::SharedPtr node,
+                            double ndt_resolution = 0.5,
                             double ndt_key_frame_downsample = 0.1);
 
   void FeedScan(LiDARFeature cur_scan,
@@ -58,14 +59,14 @@ class LidarNdtOdometry {
     ndt_registration_->SetInputTarget(cur_scan);
   }
 
-  void PublishCloudAndOdom(const PosCloud::Ptr& cur_scan = nullptr,
+  void PublishCloudAndOdom(const PosCloud::Ptr &cur_scan = nullptr,
                            bool pub_map = false);
 
-  const Eigen::aligned_vector<OdomData>& get_odom_data() const {
+  const Eigen::aligned_vector<OdomData> &get_odom_data() const {
     return odom_data_;
   }
 
-  const pclomp::NormalDistributionsTransform<PosPoint, PosPoint>::Ptr&
+  const pclomp::NormalDistributionsTransform<PosPoint, PosPoint>::Ptr &
   get_ndt_ptr() const {
     return ndt_registration_->get_ndt_ptr();
   }
@@ -86,7 +87,7 @@ class LidarNdtOdometry {
     std::ofstream outfile;
     outfile.open(traj_path);
 
-    for (const auto& v : odom_data_) {
+    for (const auto &v : odom_data_) {
       double relative_bag_time = v.timestamp + relative_start_time;
       Eigen::Vector3d p = v.pose.block<3, 1>(0, 3);
       Eigen::Quaterniond q = Eigen::Quaterniond(v.pose.block<3, 3>(0, 0));
@@ -101,12 +102,12 @@ class LidarNdtOdometry {
     std::cout << "Save ndt odom at " << traj_path << std::endl;
   }
 
- private:
+private:
   void RegisterPubSub();
 
-  void UpdateKeyScan(const LiDARFeature cur_scan, const OdomData& odom_data);
+  void UpdateKeyScan(const LiDARFeature cur_scan, const OdomData &odom_data);
 
-  bool CheckKeyScan(const OdomData& odom_data);
+  bool CheckKeyScan(const OdomData &odom_data);
 
   static void DownsampleCloud(const PosCloud::Ptr in_cloud,
                               PosCloud::Ptr out_cloud, float leaf_size) {
@@ -116,16 +117,19 @@ class LidarNdtOdometry {
     sor.filter(*out_cloud);
   }
   static inline double NormalizeAngle(double ang_degree) {
-    if (ang_degree > 180) ang_degree -= 360;
+    if (ang_degree > 180)
+      ang_degree -= 360;
 
-    if (ang_degree < -180) ang_degree += 360;
+    if (ang_degree < -180)
+      ang_degree += 360;
     return ang_degree;
   }
 
- private:
+private:
   rclcpp::Node::SharedPtr nh_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_global_map_;
-  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_current_cloud_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr
+      pub_current_cloud_;
   rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr pub_laser_odometry_;
 
   double ndt_resolution_;
@@ -138,8 +142,8 @@ class LidarNdtOdometry {
   std::vector<size_t> key_frame_index_;
 
   Eigen::aligned_vector<OdomData> odom_data_;
-};  // namespace liso
+};
 
-}  // namespace liso
+} // namespace liso
 
 #endif

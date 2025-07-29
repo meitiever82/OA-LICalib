@@ -41,6 +41,9 @@ public:
                                     true) {
     if (config_node["iteration_num"])
       iteration_num_ = config_node["iteration_num"].as<int>();
+    
+    // Pass the ROS node to the parent class
+    SetROSNode(node);
   }
 
   void InitGui() {

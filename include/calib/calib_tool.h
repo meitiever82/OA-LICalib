@@ -211,8 +211,9 @@ inline void GetLidarLocatorResult(
 inline bool EstimateRotation(const Eigen::aligned_vector<IMUData>& imu_data,
                              const std::vector<LiDARFeature>& scan_data,
                              std::shared_ptr<Trajectory> trajectory,
-                             CalibParamManager::Ptr calib_param) {
-  LidarNdtOdometry lidar_odom(calib_param->lo_param.ndt_resolution,
+                             CalibParamManager::Ptr calib_param,
+                             rclcpp::Node::SharedPtr node = nullptr) {
+  LidarNdtOdometry lidar_odom(node, calib_param->lo_param.ndt_resolution,
                               calib_param->lo_param.ndt_key_frame_downsample);
 
   InertialInitializer rot_initer;
@@ -292,7 +293,8 @@ inline bool DataAssociationWithOdom(
     const std::shared_ptr<Trajectory> trajectory,
     const CalibParamManager::Ptr calib_param,
     std::shared_ptr<ScanUndistortion> scan_undistortion,
-    SurfelAssociation::Ptr surfel_association, const std::string& cache_path) {
+    SurfelAssociation::Ptr surfel_association, const std::string& cache_path,
+    rclcpp::Node::SharedPtr node = nullptr) {
   TicToc timer;
 
   timer.tic();
@@ -300,7 +302,7 @@ inline bool DataAssociationWithOdom(
 
   auto lo_param = &calib_param->lo_param;
   LidarNdtOdometry::Ptr lidar_odom = std::make_shared<LidarNdtOdometry>(
-      lo_param->ndt_resolution, lo_param->ndt_key_frame_downsample);
+      node, lo_param->ndt_resolution, lo_param->ndt_key_frame_downsample);
 
   GetLidarOdometry(scan_timestamps, scan_undistortion->get_scan_data(),
                    trajectory, lidar_odom);

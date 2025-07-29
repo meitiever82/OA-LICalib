@@ -25,9 +25,11 @@
 
 namespace liso {
 
-LidarNdtOdometry::LidarNdtOdometry(double ndt_resolution,
+LidarNdtOdometry::LidarNdtOdometry(rclcpp::Node::SharedPtr node,
+                                   double ndt_resolution,
                                    double ndt_key_frame_downsample)
-    : ndt_resolution_(ndt_resolution),
+    : nh_(node),
+      ndt_resolution_(ndt_resolution),
       ndt_key_frame_downsample_(ndt_key_frame_downsample),
       ndt_registration_(new NDTRegistration(ndt_resolution)) {
   RegisterPubSub();

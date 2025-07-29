@@ -25,6 +25,7 @@
 
 #include <ament_index_cpp/get_package_share_directory.hpp>
 #include <string>
+#include <rclcpp/rclcpp.hpp>
 
 #include <calib/calib_tool.h>
 #include <calib/io/segment_dataset.h>
@@ -47,6 +48,8 @@ class LICalibrHelper {
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
   explicit LICalibrHelper(const YAML::Node& node);
+
+  void SetROSNode(rclcpp::Node::SharedPtr ros_node) { ros_node_ = ros_node; }
 
   void Initialization();
 
@@ -106,6 +109,8 @@ class LICalibrHelper {
   std::vector<std::shared_ptr<Trajectory>> trajectory_vec_;
 
   int iteration_num_;
+  
+  rclcpp::Node::SharedPtr ros_node_;
 };
 
 }  // namespace liso

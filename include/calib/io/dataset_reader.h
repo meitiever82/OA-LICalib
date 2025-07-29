@@ -90,7 +90,7 @@ public:
   }
 
   bool Read(const std::string path, const std::string imu_topic,
-            const std::string lidar_topic, const double bag_start = 0.0,
+            const std::string lidar_topic, const double bag_start = -1.0,
             const double bag_durr = -1.0, const std::string vicon_topic = "") {
 
     Reset();
