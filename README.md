@@ -51,7 +51,7 @@ euler_LtoI [1.0, 2.0, 5.0] degree
 Check the  parameter `path_bag` in the `config/simu.yaml`, **change it to your absolute path**. Then run it!
 
 ```shell
-ros2 launch oa_licalib li_calib.launch.py
+ros2 launch oa_licalib li_calib.launch
 ```
 
 After completing calibration, run the following script to check the calibration result.
