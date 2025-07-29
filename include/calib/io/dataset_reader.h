@@ -216,6 +216,15 @@ public:
             scan_data_.push_back(lidar_feature);
             scan_timestamps_.push_back(lidar_feature.timestamp);
             lidar_msgs++;
+          } else if (lidar_model_ == VLP_16_SIMU) {
+            // Process VLP_16 simulation data (PointCloud2 format)
+            pc_serialization.deserialize_message(&serialized_msg, pc_msg.get());
+
+            LiDARFeature lidar_feature;
+            velodyne16_convert_->unpack_scan(pc_msg, lidar_feature);
+            scan_data_.push_back(lidar_feature);
+            scan_timestamps_.push_back(lidar_feature.timestamp);
+            lidar_msgs++;
           } else if (lidar_model_ == VLP_16_points ||
                      lidar_model_ == VLP_32E_points) {
             // Process point cloud data
