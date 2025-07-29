@@ -43,14 +43,14 @@ struct SegmentDataset {
 };
 
 class SegmentDatasetManager {
- public:
+public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-  SegmentDatasetManager(const YAML::Node& node,
-                        const LidarModelType& lidar_model) {
+  SegmentDatasetManager(const YAML::Node &node,
+                        const LidarModelType &lidar_model) {
     int segment_num = node["segment_num"].as<int>();
 
-    const YAML::Node& segment_node = node["selected_segment"];
+    const YAML::Node &segment_node = node["selected_segment"];
     for (int i = 0; i < segment_num; i++) {
       std::string path_bag = segment_node[i]["path_bag"].as<std::string>();
       std::pair<double, double> segment_t;
@@ -76,12 +76,13 @@ class SegmentDatasetManager {
 
       std::shared_ptr<liso::IO::LioDataset> dataset_reader;
       dataset_reader = std::make_shared<liso::IO::LioDataset>(lidar_model);
-      
+
       // Read rosbag2 data
-      if (!dataset_reader->Read(bag_path, topic_imu, topic_lidar, bag_start, bag_durr)) {
-        RCLCPP_ERROR(rclcpp::get_logger("segment_dataset"), 
+      if (!dataset_reader->Read(bag_path, topic_imu, topic_lidar, bag_start,
+                                bag_durr)) {
+        RCLCPP_ERROR(rclcpp::get_logger("segment_dataset"),
                      "Failed to read rosbag2 data from: %s", bag_path.c_str());
-        continue;  // Skip this segment but continue with others
+        continue; // Skip this segment but continue with others
       }
       dataset_reader->AdjustDatasetTime();
 
@@ -98,33 +99,36 @@ class SegmentDatasetManager {
     }
   }
 
-  void AddSegmentData(
-      const std::shared_ptr<liso::IO::LioDataset>& lio_dataset) {
+  void
+  AddSegmentData(const std::shared_ptr<liso::IO::LioDataset> &lio_dataset) {
     segment_dataset_vec_.emplace_back();
-    segment_dataset_vec_.back().imu_data = lio_dataset->imu_data_;
-    segment_dataset_vec_.back().scan_data = lio_dataset->scan_data_;
-    segment_dataset_vec_.back().scan_timestamps = lio_dataset->scan_timestamps_;
-    segment_dataset_vec_.back().vicon_data = lio_dataset->vicon_data_;
-    segment_dataset_vec_.back().start_time = lio_dataset->start_time_;
-    segment_dataset_vec_.back().end_time = lio_dataset->end_time_;
-    // segment_dataset_vec_.back().bag_start_time =
-    // lio_dataset->bag_start_time_;
+
+    // 使用getter方法替代直接访问私有成员
+    segment_dataset_vec_.back().imu_data = lio_dataset->get_imu_data();
+    segment_dataset_vec_.back().scan_data = lio_dataset->get_scan_data();
+    segment_dataset_vec_.back().scan_timestamps =
+        lio_dataset->get_scan_timestamps();
+    segment_dataset_vec_.back().vicon_data = lio_dataset->get_vicon_data();
+    segment_dataset_vec_.back().start_time = lio_dataset->get_start_time();
+    segment_dataset_vec_.back().end_time = lio_dataset->get_end_time();
   }
 
   bool SegmentValidationCheck(
-      const Eigen::aligned_vector<Eigen::Vector3d>& gyro_vec) const {
-    if (gyro_vec.size() < 5) return false;
+      const Eigen::aligned_vector<Eigen::Vector3d> &gyro_vec) const {
+    if (gyro_vec.size() < 5)
+      return false;
 
     Eigen::Vector3d min_gyro = gyro_vec.at(0);
     Eigen::Vector3d max_gyro = gyro_vec.at(0);
-    for (auto& gyro : gyro_vec) {
+    for (auto &gyro : gyro_vec) {
       for (int i = 0; i < 3; ++i) {
         min_gyro[i] = gyro[i] < min_gyro[i] ? gyro[i] : min_gyro[i];
         max_gyro[i] = gyro[i] > max_gyro[i] ? gyro[i] : max_gyro[i];
       }
     }
 
-    if ((max_gyro - min_gyro).maxCoeff() > 0.05) return true;
+    if ((max_gyro - min_gyro).maxCoeff() > 0.05)
+      return true;
 
     return false;
   }
@@ -143,31 +147,31 @@ class SegmentDatasetManager {
   //    return segment_dataset_vec_.at(segment_id).bag_start_time;
   //  }
 
-  const std::vector<double>& GetScanTimestamps(size_t segment_id) const {
+  const std::vector<double> &GetScanTimestamps(size_t segment_id) const {
     return segment_dataset_vec_.at(segment_id).scan_timestamps;
   }
 
-  const std::vector<LiDARFeature>& GetScanData(size_t segment_id) const {
+  const std::vector<LiDARFeature> &GetScanData(size_t segment_id) const {
     return segment_dataset_vec_.at(segment_id).scan_data;
   }
 
-  const Eigen::aligned_vector<IMUData>& GetImuData(size_t segment_id) const {
+  const Eigen::aligned_vector<IMUData> &GetImuData(size_t segment_id) const {
     return segment_dataset_vec_.at(segment_id).imu_data;
   }
 
-  const Eigen::aligned_vector<PoseData>& GetViconData(size_t segment_id) const {
+  const Eigen::aligned_vector<PoseData> &GetViconData(size_t segment_id) const {
     return segment_dataset_vec_.at(segment_id).vicon_data;
   }
 
-  const std::vector<std::pair<double, double>>& GetSegmentTimestamp() const {
+  const std::vector<std::pair<double, double>> &GetSegmentTimestamp() const {
     return segment_timestamp_;
   }
 
-  const std::vector<std::string>& GetSegmentBagPath() const {
+  const std::vector<std::string> &GetSegmentBagPath() const {
     return path_bag_vec_;
   }
 
- private:
+private:
   std::vector<std::pair<double, double>> segment_timestamp_;
 
   std::vector<std::string> path_bag_vec_;
@@ -176,6 +180,6 @@ class SegmentDatasetManager {
   std::vector<SegmentDataset> segment_dataset_vec_;
 };
 
-}  // namespace liso
+} // namespace liso
 
-#endif  // DATASET_READER_H
+#endif // DATASET_READER_H

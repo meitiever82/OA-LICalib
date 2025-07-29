@@ -24,11 +24,11 @@
 #define DATASET_READER_H
 
 /// read rosbag2
-#include <rosbag2_cpp/readers/sequential_reader.hpp>
-#include <rosbag2_cpp/converter_interfaces/serialization_format_converter.hpp>
-#include <rosbag2_storage/storage_options.hpp>
-#include <rclcpp/serialization.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <rclcpp/serialization.hpp>
+#include <rosbag2_cpp/reader.hpp>
+#include <rosbag2_storage/storage_filter.hpp>
+#include <rosbag2_storage/storage_options.hpp>
 
 /// ros message
 #include <geometry_msgs/msg/transform_stamped.hpp>
@@ -60,117 +60,6 @@ namespace liso {
 
 namespace IO {
 
-template <typename MsgType>
-inline bool loadmsg(const std::string bag_path, const std::string topic,
-                    std::vector<std::shared_ptr<MsgType>> &msgs, 
-                    const double bag_start = 0, const double bag_durr = -1) {
-  // Create rosbag2 reader
-  rosbag2_cpp::readers::SequentialReader reader;
-  rosbag2_storage::StorageOptions storage_options;
-  storage_options.uri = bag_path;
-  storage_options.storage_id = "sqlite3";
-  
-  rosbag2_cpp::ConverterOptions converter_options;
-  converter_options.input_serialization_format = "cdr";
-  converter_options.output_serialization_format = "cdr";
-  
-  try {
-    reader.open(storage_options, converter_options);
-  } catch (const std::exception& e) {
-    RCLCPP_ERROR(rclcpp::get_logger("dataset_reader"), 
-                 "Failed to open rosbag: %s", e.what());
-    return false;
-  }
-  
-  // Get topic metadata
-  auto topics_and_types = reader.get_all_topics_and_types();
-  bool topic_found = false;
-  for (const auto& topic_info : topics_and_types) {
-    if (topic_info.name == topic) {
-      topic_found = true;
-      break;
-    }
-  }
-  
-  if (!topic_found) {
-    RCLCPP_ERROR(rclcpp::get_logger("dataset_reader"),
-                 "Topic %s not found in bag file", topic.c_str());
-    return false;
-  }
-  
-  // Set up topic filter
-  rosbag2_storage::StorageFilter filter;
-  filter.topics.push_back(topic);
-  reader.set_filter(filter);
-  
-  // Time filtering variables
-  rclcpp::Time start_time_ros(0, 0, RCL_ROS_TIME);
-  rclcpp::Time end_time_ros(0, 0, RCL_ROS_TIME);
-  bool first_msg = true;
-  
-  // Serialization setup
-  rclcpp::Serialization<MsgType> serialization;
-  
-  // Read messages
-  while (reader.has_next()) {
-    auto bag_message = reader.read_next();
-    
-    if (bag_message->topic_name == topic) {
-      rclcpp::Time msg_time(bag_message->time_stamp);
-      
-      // Handle time filtering
-      if (first_msg) {
-        start_time_ros = msg_time;
-        if (bag_start > 0) {
-          start_time_ros = rclcpp::Time(start_time_ros.nanoseconds() + 
-                                       static_cast<int64_t>(bag_start * 1e9));
-        }
-        if (bag_durr > 0) {
-          end_time_ros = rclcpp::Time(start_time_ros.nanoseconds() + 
-                                     static_cast<int64_t>(bag_durr * 1e9));
-        }
-        first_msg = false;
-      }
-      
-      // Apply time filtering
-      if (bag_start > 0 && msg_time < start_time_ros) continue;
-      if (bag_durr > 0 && msg_time > end_time_ros) break;
-      
-      // Deserialize message
-      rclcpp::SerializedMessage serialized_msg(*bag_message->serialized_data);
-      auto msg = std::make_shared<MsgType>();
-      
-      try {
-        serialization.deserialize_message(&serialized_msg, msg.get());
-        msgs.push_back(msg);
-      } catch (const std::exception& e) {
-        RCLCPP_WARN(rclcpp::get_logger("dataset_reader"),
-                    "Failed to deserialize message: %s", e.what());
-        continue;
-      }
-    }
-  }
-  
-  reader.close();
-  
-  if (msgs.empty()) {
-    RCLCPP_ERROR(rclcpp::get_logger("dataset_reader"),
-                 "No messages found for topic %s", topic.c_str());
-    return false;
-  }
-  
-  RCLCPP_INFO(rclcpp::get_logger("dataset_reader"), "Loaded %zu messages from topic %s",
-              msgs.size(), topic.c_str());
-  RCLCPP_INFO(rclcpp::get_logger("dataset_reader"),
-              "Time start | end | duration = %.6f | %.6f | %.3f",
-              rclcpp::Time(msgs.front()->header.stamp).seconds(),
-              rclcpp::Time(msgs.back()->header.stamp).seconds(),
-              rclcpp::Time(msgs.back()->header.stamp).seconds() -
-                  rclcpp::Time(msgs.front()->header.stamp).seconds());
-  
-  return true;
-}
-
 class LioDataset {
 public:
   LioDataset(LidarModelType lidar_model) : lidar_model_(lidar_model) {}
@@ -178,155 +67,221 @@ public:
   void Init() {
     velodyne16_convert_ = nullptr;
     vlp_point_convert_ = nullptr;
-    // p_robosense_convert_ = nullptr;
 
     if (lidar_model_ == VLP_16_packet || lidar_model_ == VLP_16_SIMU) {
       velodyne16_convert_ = std::make_shared<Velodyne16>();
       std::cout << "LiDAR model set as VLP_16." << std::endl;
-    } //
-    else if (lidar_model_ == VLP_16_points || lidar_model_ == VLP_32E_points) {
+    } else if (lidar_model_ == VLP_16_points ||
+               lidar_model_ == VLP_32E_points) {
       VelodyneType vlp_type = (lidar_model_ == VLP_16_points) ? VLP16 : VLP32E;
       vlp_point_convert_ = std::make_shared<VelodynePoints>(vlp_type);
       std::cout << "LiDAR model set as velodyne_points." << std::endl;
-    } //
-    /*else if (lidar_model_ == Ouster_16_points ||
-             lidar_model_ == Ouster_32_points ||
-             lidar_model_ == Ouster_64_points ||
-             lidar_model_ == Ouster_128_points) {
-      OusterRingNo ring_no = OusterRingNo::Ring128;
-      if (lidar_model_ == Ouster_16_points)
-        ring_no = Ring16;
-      else if (lidar_model_ == Ouster_32_points)
-        ring_no = Ring32;
-      else if (lidar_model_ == Ouster_64_points)
-        ring_no = Ring64;
-      else if (lidar_model_ == Ouster_128_points)
-        ring_no = Ring128;
-
-      ouster_convert_ = std::make_shared<OusterLiDAR>(ring_no);
-      lidar_model_ = LidarModelType::Ouster;
-      std::cout << "LiDAR model set as Ouster " << int(ring_no) << " points.\n";
-    } //
-    else if (lidar_model_ == RS_16) {
-      p_robosense_convert_ = std::make_shared<RobosenseCorrection>(
-          RobosenseCorrection::ModelType::RS_16);
-      std::cout << "LiDAR model set as RS_16." << std::endl;
-    } //*/
-    else {
+    } else if (lidar_model_ == Ouster_16_points ||
+               lidar_model_ == Ouster_32_points ||
+               lidar_model_ == Ouster_64_points ||
+               lidar_model_ == Ouster_128_points) {
+      throw std::runtime_error("LiDAR model not supported.");
+    } else if (lidar_model_ == RS_16) {
+      throw std::runtime_error("LiDAR model not supported.");
+    } else {
       std::cout << "LiDAR model " << lidar_model_ << " not support yet."
                 << std::endl;
     }
   }
 
   bool Read(const std::string path, const std::string imu_topic,
-            const std::string lidar_topic, const double bag_start = -1.0,
+            const std::string lidar_topic, const double bag_start = 0.0,
             const double bag_durr = -1.0, const std::string vicon_topic = "") {
-    
+
     Reset();
     Init();
-    
-    RCLCPP_INFO(rclcpp::get_logger("dataset_reader"), 
-                "Reading rosbag2: %s", path.c_str());
-    RCLCPP_INFO(rclcpp::get_logger("dataset_reader"), 
-                "IMU topic: %s, LiDAR topic: %s", 
-                imu_topic.c_str(), lidar_topic.c_str());
-    
-    // Read IMU data
-    std::vector<sensor_msgs::msg::Imu::SharedPtr> imu_msgs;
-    if (!loadmsg<sensor_msgs::msg::Imu>(path, imu_topic, imu_msgs, bag_start, bag_durr)) {
-      RCLCPP_ERROR(rclcpp::get_logger("dataset_reader"), 
-                   "Failed to load IMU messages from topic: %s", imu_topic.c_str());
-      return false;
-    }
-    
-    // Convert IMU messages to internal format
-    for (const auto& imu_msg : imu_msgs) {
-      IMUData imu_data;
-      imu_data.timestamp = rclcpp::Time(imu_msg->header.stamp).seconds();
-      imu_data.gyro = Eigen::Vector3d(imu_msg->angular_velocity.x,
-                                      imu_msg->angular_velocity.y,
-                                      imu_msg->angular_velocity.z);
-      imu_data.accel = Eigen::Vector3d(imu_msg->linear_acceleration.x,
-                                       imu_msg->linear_acceleration.y,
-                                       imu_msg->linear_acceleration.z);
-      imu_data_.push_back(imu_data);
-    }
-    
-    // Read LiDAR data based on model type
-    bool lidar_success = false;
-    
-    if (lidar_model_ == VLP_16_packet) {
-      // Read Velodyne packet data
-      std::vector<velodyne_msgs::msg::VelodyneScan::SharedPtr> lidar_msgs;
-      if (loadmsg<velodyne_msgs::msg::VelodyneScan>(path, lidar_topic, lidar_msgs, bag_start, bag_durr)) {
-        for (const auto& scan_msg : lidar_msgs) {
-          LiDARFeature lidar_feature;
-          velodyne16_convert_->unpack_scan(scan_msg, lidar_feature);
-          scan_data_.push_back(lidar_feature);
-          scan_timestamps_.push_back(lidar_feature.timestamp);
-        }
-        lidar_success = true;
-      }
-    } 
-    else if (lidar_model_ == VLP_16_points || lidar_model_ == VLP_32E_points) {
-      // Read point cloud data
-      std::vector<sensor_msgs::msg::PointCloud2::SharedPtr> lidar_msgs;
-      if (loadmsg<sensor_msgs::msg::PointCloud2>(path, lidar_topic, lidar_msgs, bag_start, bag_durr)) {
-        if (lidar_model_ == VLP_16_points) {
-          for (const auto& cloud_msg : lidar_msgs) {
-            LiDARFeature lidar_feature;
-            vlp_point_convert_->get_organized_and_raw_cloud(cloud_msg, lidar_feature);
-            scan_data_.push_back(lidar_feature);
-            scan_timestamps_.push_back(lidar_feature.timestamp);
-          }
-        } else {
-          // VLP_32E_points - also use vlp_point_convert
-          for (const auto& cloud_msg : lidar_msgs) {
-            LiDARFeature lidar_feature;
-            vlp_point_convert_->get_organized_and_raw_cloud(cloud_msg, lidar_feature);
-            scan_data_.push_back(lidar_feature);
-            scan_timestamps_.push_back(lidar_feature.timestamp);
-          }
-        }
-        lidar_success = true;
-      }
-    }
-    
-    if (!lidar_success) {
-      RCLCPP_ERROR(rclcpp::get_logger("dataset_reader"), 
-                   "Failed to load LiDAR messages from topic: %s", lidar_topic.c_str());
-      return false;
-    }
-    
-    // Read Vicon data if topic is provided
+
+    RCLCPP_INFO(rclcpp::get_logger("dataset_reader"), "Reading rosbag2: %s",
+                path.c_str());
+    RCLCPP_INFO(rclcpp::get_logger("dataset_reader"),
+                "IMU topic: %s, LiDAR topic: %s", imu_topic.c_str(),
+                lidar_topic.c_str());
+
+    // Create storage options
+    rosbag2_storage::StorageOptions storage_options;
+    storage_options.uri = path;
+    storage_options.storage_id = "sqlite3";
+
+    // Set up topic filter
+    auto filter = rosbag2_storage::StorageFilter{};
+    filter.topics.push_back(imu_topic);
+    filter.topics.push_back(lidar_topic);
     if (!vicon_topic.empty()) {
-      std::vector<geometry_msgs::msg::TransformStamped::SharedPtr> vicon_msgs;
-      if (loadmsg<geometry_msgs::msg::TransformStamped>(path, vicon_topic, vicon_msgs, bag_start, bag_durr)) {
-        for (const auto& vicon_msg : vicon_msgs) {
+      filter.topics.push_back(vicon_topic);
+    }
+
+    // Create reader
+    rosbag2_cpp::Reader reader;
+    try {
+      reader.open(storage_options);
+      reader.set_filter(filter);
+    } catch (const std::exception &e) {
+      RCLCPP_ERROR(rclcpp::get_logger("dataset_reader"),
+                   "Failed to open rosbag: %s", e.what());
+      return false;
+    }
+
+    // Check if bag has messages
+    if (!reader.has_next()) {
+      RCLCPP_ERROR(rclcpp::get_logger("dataset_reader"),
+                   "No messages found in bag");
+      return false;
+    }
+
+    // Get bag metadata for time calculation
+    auto original_start =
+        reader.get_metadata().starting_time.time_since_epoch();
+    int start_msec = bag_start * 1000;
+    auto offset_s = std::chrono::milliseconds(start_msec);
+    auto start_ns = original_start + offset_s;
+
+    int dur_msec = bag_durr * 1000;
+    auto bag_durr_s = std::chrono::milliseconds(dur_msec);
+    auto end_ns = (bag_durr < 0) ? start_ns + reader.get_metadata().duration
+                                 : start_ns + bag_durr_s;
+
+    RCLCPP_INFO(rclcpp::get_logger("dataset_reader"), "bag start time: %ld ns",
+                start_ns.count());
+    RCLCPP_INFO(rclcpp::get_logger("dataset_reader"), "bag end time: %ld ns",
+                end_ns.count());
+
+    // Serialization objects
+    rclcpp::Serialization<sensor_msgs::msg::Imu> imu_serialization;
+    rclcpp::Serialization<sensor_msgs::msg::PointCloud2> pc_serialization;
+    rclcpp::Serialization<velodyne_msgs::msg::VelodyneScan>
+        velodyne_serialization;
+    rclcpp::Serialization<geometry_msgs::msg::TransformStamped>
+        vicon_serialization;
+
+    // Message containers
+    auto imu_msg = std::make_shared<sensor_msgs::msg::Imu>();
+    auto pc_msg = std::make_shared<sensor_msgs::msg::PointCloud2>();
+    auto velodyne_msg = std::make_shared<velodyne_msgs::msg::VelodyneScan>();
+    auto vicon_msg = std::make_shared<geometry_msgs::msg::TransformStamped>();
+
+    // Counters
+    int imu_msgs = 0, lidar_msgs = 0, vicon_msgs = 0;
+
+    // Read messages
+    while (reader.has_next()) {
+      auto bag_message = reader.read_next();
+      rclcpp::SerializedMessage serialized_msg(*bag_message->serialized_data);
+
+      const auto message_timestamp =
+          std::chrono::nanoseconds(bag_message->time_stamp);
+
+      // Skip messages outside time range
+      if (message_timestamp < start_ns || message_timestamp > end_ns) {
+        continue;
+      }
+
+      // Process IMU messages
+      if (bag_message->topic_name == imu_topic) {
+        try {
+          imu_serialization.deserialize_message(&serialized_msg, imu_msg.get());
+
+          IMUData imu_data;
+          imu_data.timestamp = rclcpp::Time(imu_msg->header.stamp).seconds();
+          imu_data.gyro = Eigen::Vector3d(imu_msg->angular_velocity.x,
+                                          imu_msg->angular_velocity.y,
+                                          imu_msg->angular_velocity.z);
+          imu_data.accel = Eigen::Vector3d(imu_msg->linear_acceleration.x,
+                                           imu_msg->linear_acceleration.y,
+                                           imu_msg->linear_acceleration.z);
+          imu_data.orientation = Eigen::Quaterniond(
+              imu_msg->orientation.w, imu_msg->orientation.x,
+              imu_msg->orientation.y, imu_msg->orientation.z);
+          imu_data_.push_back(imu_data);
+          imu_msgs++;
+        } catch (const std::exception &e) {
+          RCLCPP_WARN(rclcpp::get_logger("dataset_reader"),
+                      "Failed to deserialize IMU message: %s", e.what());
+        }
+      }
+      // Process LiDAR messages
+      else if (bag_message->topic_name == lidar_topic) {
+        try {
+          if (lidar_model_ == VLP_16_packet) {
+            // Process Velodyne packet data
+            velodyne_serialization.deserialize_message(&serialized_msg,
+                                                       velodyne_msg.get());
+
+            LiDARFeature lidar_feature;
+            velodyne16_convert_->unpack_scan(velodyne_msg, lidar_feature);
+            scan_data_.push_back(lidar_feature);
+            scan_timestamps_.push_back(lidar_feature.timestamp);
+            lidar_msgs++;
+          } else if (lidar_model_ == VLP_16_points ||
+                     lidar_model_ == VLP_32E_points) {
+            // Process point cloud data
+            pc_serialization.deserialize_message(&serialized_msg, pc_msg.get());
+
+            LiDARFeature lidar_feature;
+            vlp_point_convert_->get_organized_and_raw_cloud(pc_msg,
+                                                            lidar_feature);
+            scan_data_.push_back(lidar_feature);
+            scan_timestamps_.push_back(lidar_feature.timestamp);
+            lidar_msgs++;
+          }
+        } catch (const std::exception &e) {
+          RCLCPP_WARN(rclcpp::get_logger("dataset_reader"),
+                      "Failed to deserialize LiDAR message: %s", e.what());
+        }
+      }
+      // Process Vicon messages
+      else if (!vicon_topic.empty() && bag_message->topic_name == vicon_topic) {
+        try {
+          vicon_serialization.deserialize_message(&serialized_msg,
+                                                  vicon_msg.get());
+
           PoseData pose_data;
           pose_data.timestamp = rclcpp::Time(vicon_msg->header.stamp).seconds();
-          pose_data.position = Eigen::Vector3d(vicon_msg->transform.translation.x,
-                                               vicon_msg->transform.translation.y,
-                                               vicon_msg->transform.translation.z);
-          Eigen::Quaterniond quat(vicon_msg->transform.rotation.w,
-                                   vicon_msg->transform.rotation.x,
-                                   vicon_msg->transform.rotation.y,
-                                   vicon_msg->transform.rotation.z);
+          pose_data.position =
+              Eigen::Vector3d(vicon_msg->transform.translation.x,
+                              vicon_msg->transform.translation.y,
+                              vicon_msg->transform.translation.z);
+          Eigen::Quaterniond quat(
+              vicon_msg->transform.rotation.w, vicon_msg->transform.rotation.x,
+              vicon_msg->transform.rotation.y, vicon_msg->transform.rotation.z);
           pose_data.orientation = SO3d(quat);
           vicon_data_.push_back(pose_data);
+          vicon_msgs++;
+        } catch (const std::exception &e) {
+          RCLCPP_WARN(rclcpp::get_logger("dataset_reader"),
+                      "Failed to deserialize Vicon message: %s", e.what());
         }
-        RCLCPP_INFO(rclcpp::get_logger("dataset_reader"), 
-                    "Loaded %zu Vicon messages", vicon_data_.size());
-      } else {
-        RCLCPP_WARN(rclcpp::get_logger("dataset_reader"), 
-                    "Failed to load Vicon messages from topic: %s", vicon_topic.c_str());
       }
     }
-    
-    RCLCPP_INFO(rclcpp::get_logger("dataset_reader"), 
-                "Successfully loaded dataset: %zu IMU, %zu LiDAR messages",
-                imu_data_.size(), scan_data_.size());
-    
+
+    // Verify data
+    if (imu_data_.empty()) {
+      RCLCPP_ERROR(rclcpp::get_logger("dataset_reader"),
+                   "No IMU data loaded from topic: %s", imu_topic.c_str());
+      return false;
+    }
+
+    if (scan_data_.empty()) {
+      RCLCPP_ERROR(rclcpp::get_logger("dataset_reader"),
+                   "No LiDAR data loaded from topic: %s", lidar_topic.c_str());
+      return false;
+    }
+
+    RCLCPP_INFO(rclcpp::get_logger("dataset_reader"),
+                "Successfully loaded: %d IMU, %d LiDAR messages between %.3f "
+                "and %.3f seconds",
+                imu_msgs, lidar_msgs, start_ns.count() / 1e9,
+                end_ns.count() / 1e9);
+
+    if (!vicon_topic.empty()) {
+      RCLCPP_INFO(rclcpp::get_logger("dataset_reader"),
+                  "Loaded %d Vicon messages", vicon_msgs);
+    }
+
     return true;
   }
 
@@ -339,6 +294,10 @@ public:
         std::min(imu_data_.front().timestamp, vicon_data_.front().timestamp);
     end_time_ =
         std::max(imu_data_.back().timestamp, vicon_data_.back().timestamp);
+
+    RCLCPP_INFO(rclcpp::get_logger("dataset_reader"),
+                "Adjusting timestamps: start=%.6f, end=%.6f, duration=%.3f",
+                start_time_, end_time_, end_time_ - start_time_);
 
     for (size_t i = 0; i < imu_data_.size(); i++) {
       imu_data_[i].timestamp -= start_time_;
@@ -356,12 +315,14 @@ public:
 
     assert(scan_timestamps_.front() < imu_data_.back().timestamp &&
            scan_timestamps_.back() > imu_data_.front().timestamp &&
-           "Unvalid dataset. Check your dataset.. ");
+           "Invalid dataset. Check your dataset timing..");
 
     start_time_ =
         std::min(scan_timestamps_.front(), imu_data_.front().timestamp);
     end_time_ = std::max(scan_timestamps_.back(), imu_data_.back().timestamp);
-    std::cout << "start_time set as " << start_time_ << std::endl;
+
+    RCLCPP_INFO(rclcpp::get_logger("dataset_reader"), "start_time set as %.6f",
+                start_time_);
 
     for (size_t i = 0; i < imu_data_.size(); i++) {
       imu_data_[i].timestamp -= start_time_;
@@ -381,12 +342,13 @@ public:
       }
     }
 
-    std::cout << "IMU timestamp from : " << imu_data_.front().timestamp
-              << " to " << imu_data_.back().timestamp << std::endl;
-    std::cout << "scan timestamp from : " << scan_data_.front().timestamp
-              << " to "
-              << scan_data_.back().full_features->points.back().timestamp
-              << std::endl;
+    RCLCPP_INFO(rclcpp::get_logger("dataset_reader"),
+                "IMU timestamp from: %.6f to %.6f", imu_data_.front().timestamp,
+                imu_data_.back().timestamp);
+    RCLCPP_INFO(rclcpp::get_logger("dataset_reader"),
+                "scan timestamp from: %.6f to %.6f",
+                scan_data_.front().timestamp,
+                scan_data_.back().full_features->points.back().timestamp);
   }
 
   void AddSimulationTimeoffset(double added_timeoffset) {
@@ -406,44 +368,35 @@ public:
     scan_data_.clear();
     scan_timestamps_.clear();
     vicon_data_.clear();
+    start_time_ = 0.0;
+    end_time_ = 0.0;
   }
 
+  // Getters
   double get_start_time() const { return start_time_; }
-
   double get_end_time() const { return end_time_; }
-
   const std::vector<double> &get_scan_timestamps() const {
     return scan_timestamps_;
   }
-
   const Eigen::aligned_vector<IMUData> &get_imu_data() const {
     return imu_data_;
   }
-
   const Eigen::aligned_vector<PoseData> &get_vicon_data() const {
     return vicon_data_;
   }
-
   const std::vector<LiDARFeature> &get_scan_data() const { return scan_data_; }
 
-public:
-  // rosbag2 reader - no need to store as member variable
-
+private:
   Eigen::aligned_vector<IMUData> imu_data_;
-
   std::vector<LiDARFeature> scan_data_;
-
   std::vector<double> scan_timestamps_;
-
   Eigen::aligned_vector<PoseData> vicon_data_;
 
-  double start_time_;
-  double end_time_;
+  double start_time_ = 0.0;
+  double end_time_ = 0.0;
 
   Velodyne16::Ptr velodyne16_convert_;
   VelodynePoints::Ptr vlp_point_convert_;
-  // OusterLiDAR::Ptr ouster_convert_;
-  // RobosenseCorrection::Ptr p_robosense_convert_;
 
   LidarModelType lidar_model_;
 };
