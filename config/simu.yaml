@@ -12,7 +12,7 @@ map_downsample_size: 0.25
 
 knot_distance: 0.02
 
-use_gui: true
+use_gui: false
 
 # 当 segment_num = 1时，即用一段数据标定
 segment_num: 1
