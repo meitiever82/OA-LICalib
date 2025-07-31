@@ -32,23 +32,21 @@
 #include <trajectory/trajectory_estimator.h>
 #include <utils/tic_toc.h>
 
-#include <trajectory/trajectory_viewer.h>
-
 namespace liso {
 
 namespace CalibTool {
 
-inline void InitialSO3TrajWithGyro(
-    const CalibParamManager::Ptr calib_param,
-    const Eigen::aligned_vector<IMUData>& imu_data,
-    std::shared_ptr<Trajectory> trajectory) {
+inline void
+InitialSO3TrajWithGyro(const CalibParamManager::Ptr calib_param,
+                       const Eigen::aligned_vector<IMUData> &imu_data,
+                       std::shared_ptr<Trajectory> trajectory) {
   double gyro_weight = 1.0;
   double orientation_weight = 1.0;
 
   TrajectoryEstimatorOptions options;
   TrajectoryEstimator estimator(trajectory, calib_param, options);
 
-  for (auto const& v : imu_data) {
+  for (auto const &v : imu_data) {
     estimator.AddIMUGyroMeasurement(v, gyro_weight);
   }
 
@@ -62,10 +60,10 @@ inline void InitialSO3TrajWithGyro(
             << summary.BriefReport() << std::endl;
 }
 
-inline void InitialIMUTrajectory(
-    const CalibParamManager::Ptr calib_param,
-    const Eigen::aligned_vector<OdomData>& odom_data,
-    std::shared_ptr<Trajectory> imu_trajectory) {
+inline void
+InitialIMUTrajectory(const CalibParamManager::Ptr calib_param,
+                     const Eigen::aligned_vector<OdomData> &odom_data,
+                     std::shared_ptr<Trajectory> imu_trajectory) {
   std::cout << "[InitialIMUTrajectory]\n";
   std::cout << "odom_data t: " << odom_data.back().timestamp << std::endl;
   std::cout << "traj t: " << imu_trajectory->maxTime() << std::endl;
@@ -82,7 +80,7 @@ inline void InitialIMUTrajectory(
 
   TrajectoryEstimatorOptions options;
   TrajectoryEstimator estimator(raw_odom_traj, calib_param, options);
-  for (auto const& v : odom_data) {
+  for (auto const &v : odom_data) {
     Sophus::SO3d R_MtoL =
         Sophus::SO3d(Eigen::Quaterniond(v.pose.block<3, 3>(0, 0)));
 
@@ -94,7 +92,7 @@ inline void InitialIMUTrajectory(
     estimator.AddPoseMeasurement(pose_ItoM, 1, 1);
   }
   {
-    auto const& v = odom_data.front();
+    auto const &v = odom_data.front();
     Sophus::SO3d R_MtoL =
         Sophus::SO3d(Eigen::Quaterniond(v.pose.block<3, 3>(0, 0)));
     PoseData pose_ItoM;
@@ -106,7 +104,7 @@ inline void InitialIMUTrajectory(
   }
 
   {
-    auto const& v = odom_data.back();
+    auto const &v = odom_data.back();
     Sophus::SO3d R_MtoL =
         Sophus::SO3d(Eigen::Quaterniond(v.pose.block<3, 3>(0, 0)));
     PoseData pose_ItoM;
@@ -161,15 +159,16 @@ inline void InitialIMUTrajectory(
   //      TrajectoryViewer::PublishViconData(imu_trajectory, imu_init_data);
 }
 
-inline void GetLidarOdometry(
-    const std::vector<double>& scan_timestamps,
-    const std::map<double, LiDARFeature>& undistort_scan_data,
-    const std::shared_ptr<Trajectory>& trajectory,
-    LidarNdtOdometry::Ptr lidar_odom, double scan4map_time = -1) {
+inline void
+GetLidarOdometry(const std::vector<double> &scan_timestamps,
+                 const std::map<double, LiDARFeature> &undistort_scan_data,
+                 const std::shared_ptr<Trajectory> &trajectory,
+                 LidarNdtOdometry::Ptr lidar_odom, double scan4map_time = -1) {
   bool update_map = true;
   double last_scan_time = 0;
-  for (const double& scan_time : scan_timestamps) {
-    if (scan4map_time > 0 && scan_time > scan4map_time) update_map = false;
+  for (const double &scan_time : scan_timestamps) {
+    if (scan4map_time > 0 && scan_time > scan4map_time)
+      update_map = false;
     auto iter = undistort_scan_data.find(scan_time);
     if (iter != undistort_scan_data.end()) {
       Eigen::Matrix4d pose_predict = Eigen::Matrix4d::Identity();
@@ -184,13 +183,13 @@ inline void GetLidarOdometry(
   }
 }
 
-inline void GetLidarLocatorResult(
-    const std::vector<double>& scan_timestamps,
-    const std::map<double, LiDARFeature>& undistort_scan_data,
-    const std::shared_ptr<Trajectory>& trajectory,
-    LIDARLocalization::Ptr& ndt_locator) {
+inline void
+GetLidarLocatorResult(const std::vector<double> &scan_timestamps,
+                      const std::map<double, LiDARFeature> &undistort_scan_data,
+                      const std::shared_ptr<Trajectory> &trajectory,
+                      LIDARLocalization::Ptr &ndt_locator) {
   double last_scan_time = 0;
-  for (const double& scan_time : scan_timestamps) {
+  for (const double &scan_time : scan_timestamps) {
     auto iter = undistort_scan_data.find(scan_time);
     if (iter != undistort_scan_data.end()) {
       Eigen::Matrix4d pose_predict = Eigen::Matrix4d::Identity();
@@ -208,8 +207,8 @@ inline void GetLidarLocatorResult(
   ndt_locator->CaculateGlobalMapAndOdom(undistort_scan_data);
 }
 
-inline bool EstimateRotation(const Eigen::aligned_vector<IMUData>& imu_data,
-                             const std::vector<LiDARFeature>& scan_data,
+inline bool EstimateRotation(const Eigen::aligned_vector<IMUData> &imu_data,
+                             const std::vector<LiDARFeature> &scan_data,
                              std::shared_ptr<Trajectory> trajectory,
                              CalibParamManager::Ptr calib_param,
                              rclcpp::Node::SharedPtr node = nullptr) {
@@ -217,7 +216,7 @@ inline bool EstimateRotation(const Eigen::aligned_vector<IMUData>& imu_data,
                               calib_param->lo_param.ndt_key_frame_downsample);
 
   InertialInitializer rot_initer;
-  for (auto const& scan_raw : scan_data) {
+  for (auto const &scan_raw : scan_data) {
     lidar_odom.FeedScan(scan_raw);
     if (lidar_odom.get_odom_data().size() < 20 ||
         (lidar_odom.get_odom_data().size() % 5 != 0))
@@ -241,12 +240,12 @@ inline bool EstimateRotation(const Eigen::aligned_vector<IMUData>& imu_data,
   return false;
 }
 
-inline bool DataAssociation(
-    const std::vector<LiDARFeature>& scan_data,
-    const std::map<double, LiDARFeature>& scan_data_in_map,
-    SurfelAssociation::Ptr surfel_association) {
+inline bool
+DataAssociation(const std::vector<LiDARFeature> &scan_data,
+                const std::map<double, LiDARFeature> &scan_data_in_map,
+                SurfelAssociation::Ptr surfel_association) {
   /// get association
-  for (auto const& scan_raw : scan_data) {
+  for (auto const &scan_raw : scan_data) {
     auto iter = scan_data_in_map.find(scan_raw.timestamp);
     if (iter == scan_data_in_map.end()) {
       continue;
@@ -270,8 +269,8 @@ inline bool DataAssociation(
   }
 }
 
-inline pclomp::NormalDistributionsTransform<PosPoint, PosPoint>::Ptr GetNDtPtr(
-    const PosCloud::Ptr& map_cloud, double ndt_resolution) {
+inline pclomp::NormalDistributionsTransform<PosPoint, PosPoint>::Ptr
+GetNDtPtr(const PosCloud::Ptr &map_cloud, double ndt_resolution) {
   auto ndt_omp = pclomp::NormalDistributionsTransform<PosPoint, PosPoint>::Ptr(
       new pclomp::NormalDistributionsTransform<PosPoint, PosPoint>());
   ndt_omp->setResolution(ndt_resolution);
@@ -286,15 +285,16 @@ inline pclomp::NormalDistributionsTransform<PosPoint, PosPoint>::Ptr GetNDtPtr(
   return ndt_omp;
 }
 
-inline bool DataAssociationWithOdom(
-    const std::vector<LiDARFeature>& scan_data,
-    const std::vector<double>& scan_timestamps,
-    const std::pair<double, double>& segment_timestamp,
-    const std::shared_ptr<Trajectory> trajectory,
-    const CalibParamManager::Ptr calib_param,
-    std::shared_ptr<ScanUndistortion> scan_undistortion,
-    SurfelAssociation::Ptr surfel_association, const std::string& cache_path,
-    rclcpp::Node::SharedPtr node = nullptr) {
+inline bool
+DataAssociationWithOdom(const std::vector<LiDARFeature> &scan_data,
+                        const std::vector<double> &scan_timestamps,
+                        const std::pair<double, double> &segment_timestamp,
+                        const std::shared_ptr<Trajectory> trajectory,
+                        const CalibParamManager::Ptr calib_param,
+                        std::shared_ptr<ScanUndistortion> scan_undistortion,
+                        SurfelAssociation::Ptr surfel_association,
+                        const std::string &cache_path,
+                        rclcpp::Node::SharedPtr node = nullptr) {
   TicToc timer;
 
   timer.tic();
@@ -332,15 +332,16 @@ inline bool DataAssociationWithOdom(
   return ret;
 }
 
-inline bool DataAssociationWithLocator(
-    const std::vector<LiDARFeature>& scan_data,
-    const std::vector<double>& scan_timestamps,
-    const std::pair<double, double>& segment_timestamp,
-    const std::shared_ptr<Trajectory> trajectory,
-    const CalibParamManager::Ptr calib_param,
-    LIDARLocalization::Ptr& ndt_locator,
-    std::shared_ptr<ScanUndistortion> scan_undistortion,
-    SurfelAssociation::Ptr surfel_association, const std::string& cache_path) {
+inline bool
+DataAssociationWithLocator(const std::vector<LiDARFeature> &scan_data,
+                           const std::vector<double> &scan_timestamps,
+                           const std::pair<double, double> &segment_timestamp,
+                           const std::shared_ptr<Trajectory> trajectory,
+                           const CalibParamManager::Ptr calib_param,
+                           LIDARLocalization::Ptr &ndt_locator,
+                           std::shared_ptr<ScanUndistortion> scan_undistortion,
+                           SurfelAssociation::Ptr surfel_association,
+                           const std::string &cache_path) {
   scan_undistortion->UndistortScan(trajectory, scan_data, false);
 
   GetLidarLocatorResult(scan_timestamps, scan_undistortion->get_scan_data(),
@@ -365,12 +366,12 @@ inline bool DataAssociationWithLocator(
   return ret;
 }
 
-inline bool DataAssociationWithTraj(
-    const std::vector<LiDARFeature>& scan_data,
-    const std::shared_ptr<Trajectory> trajectory,
-    const CalibParamManager::Ptr calib_param,
-    std::shared_ptr<ScanUndistortion> scan_undistortion,
-    SurfelAssociation::Ptr surfel_association) {
+inline bool
+DataAssociationWithTraj(const std::vector<LiDARFeature> &scan_data,
+                        const std::shared_ptr<Trajectory> trajectory,
+                        const CalibParamManager::Ptr calib_param,
+                        std::shared_ptr<ScanUndistortion> scan_undistortion,
+                        SurfelAssociation::Ptr surfel_association) {
   scan_undistortion->UndistortScanInMap(trajectory, scan_data, true);
   std::cout << "get refined map done\n";
 
@@ -389,8 +390,8 @@ inline bool DataAssociationWithTraj(
 inline void GetLidarPointCorrespondence(
     const SurfelAssociation::Ptr surfel_association,
     std::pair<double, double> selected_time,
-    Eigen::aligned_vector<PointCorrespondence>& point_measurement,
-    std::pair<double, double>& valid_time) {
+    Eigen::aligned_vector<PointCorrespondence> &point_measurement,
+    std::pair<double, double> &valid_time) {
   double valid_time_min = selected_time.second;
   double valid_time_max = selected_time.first;
 
@@ -416,7 +417,7 @@ inline void GetLidarPointCorrespondence(
 }
 
 inline Eigen::Vector3d GetLidarCov(
-    const Eigen::aligned_vector<PointCorrespondence>& point_measurement) {
+    const Eigen::aligned_vector<PointCorrespondence> &point_measurement) {
   Eigen::Matrix3d nnt = Eigen::Matrix3d::Zero();
   for (PointCorrespondence pc : point_measurement) {
     nnt += pc.geo_plane.head(3) * pc.geo_plane.head(3).transpose();
@@ -424,8 +425,8 @@ inline Eigen::Vector3d GetLidarCov(
 
   if (!point_measurement.empty()) {
     nnt /= point_measurement.size();
-    Eigen::JacobiSVD<Eigen::MatrixXd> svd(
-        nnt, Eigen::ComputeFullU | Eigen::ComputeFullV);
+    Eigen::JacobiSVD<Eigen::MatrixXd> svd(nnt, Eigen::ComputeFullU |
+                                                   Eigen::ComputeFullV);
     Eigen::Vector3d plane_cov = svd.singularValues();
     return plane_cov;
   } else {
@@ -434,9 +435,9 @@ inline Eigen::Vector3d GetLidarCov(
 }
 
 inline void AddIMUAndSurfelToProblem(
-    const CalibWeights& calib_weights,
+    const CalibWeights &calib_weights,
     const Eigen::aligned_vector<IMUData> imu_data,
-    const Eigen::aligned_vector<PointCorrespondence>& point_measurement,
+    const Eigen::aligned_vector<PointCorrespondence> &point_measurement,
     const std::pair<double, double> lidar_valid_time,
     std::shared_ptr<Trajectory> trajectory,
     std::shared_ptr<TrajectoryEstimator> estimator) {
@@ -445,14 +446,14 @@ inline void AddIMUAndSurfelToProblem(
   double lidar_weight = calib_weights.opt_lidar_weight;
 
   /// [step1] Add IMU measurement
-  for (const IMUData& data : imu_data) {
+  for (const IMUData &data : imu_data) {
     if (trajectory->GetTrajQuality(data.timestamp)) {
       estimator->AddIMUMeasurement(data, gyro_weight, acce_weight);
     }
   }
 
   /// [step2] Add surfel measurement
-  for (const PointCorrespondence& pc : point_measurement) {
+  for (const PointCorrespondence &pc : point_measurement) {
     estimator->AddLiDARSurfelMeasurement(pc, lidar_weight);
   }
 
@@ -465,7 +466,7 @@ inline void AddIMUAndSurfelToProblem(
     valid_time.second = imu_data.back().timestamp;
 }
 
-}  // namespace CalibTool
-}  // namespace liso
+} // namespace CalibTool
+} // namespace liso
 
 #endif

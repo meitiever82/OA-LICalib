@@ -24,8 +24,8 @@
 #define CALIB_HELPER_H
 
 #include <ament_index_cpp/get_package_share_directory.hpp>
-#include <string>
 #include <rclcpp/rclcpp.hpp>
+#include <string>
 
 #include <calib/calib_tool.h>
 #include <calib/io/segment_dataset.h>
@@ -43,15 +43,18 @@ enum CalibStep {
   RefineDone
 };
 
-class LICalibrHelper {
- public:
+class LICalibrManager {
+public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-  explicit LICalibrHelper(const YAML::Node& node);
+  enum class CalibResult { SUCCESS, FAILED, INVALID_DATA };
 
-  void SetROSNode(rclcpp::Node::SharedPtr ros_node) { ros_node_ = ros_node; }
+  explicit LICalibrManager(const YAML::Node &node,
+                           rclcpp::Node::SharedPtr &ros_node);
 
   void Initialization();
+
+  bool IsValidSegmentId(int id) const;
 
   void DataAssociationInOdom();
 
@@ -63,18 +66,43 @@ class LICalibrHelper {
 
   void Refinement();
 
-  void SaveCalibResult(const std::string& calib_result_file) const;
+  void SaveCalibResult(const std::string &calib_result_file) const;
 
   void SavePointCloud() const;
 
- protected:
-  void LoadDataset(const YAML::Node& node);
+public:
+  // 定义回调函数类型
+  using LoamCorrespondencePublisher =
+      std::function<void(const std::shared_ptr<Trajectory> &,
+                         const Eigen::aligned_vector<PointCorrespondence> &)>;
 
-  bool CreateCacheFolder(const std::string& bag_path);
+  using IMUDataPublisher =
+      std::function<void(const std::shared_ptr<Trajectory> &,
+                         const Eigen::aligned_vector<IMUData> &)>;
+
+  using SplineTrajectoryPublisher =
+      std::function<void(const std::shared_ptr<Trajectory> &, double start_time,
+                         double end_time, double dt)>;
+
+  // 设置回调函数的方法
+  void
+  SetVisualizationCallbacks(LoamCorrespondencePublisher loam_pub = nullptr,
+                            IMUDataPublisher imu_pub = nullptr,
+                            SplineTrajectoryPublisher spline_pub = nullptr) {
+
+    publish_loam_correspondence_ = loam_pub;
+    publish_imu_data_ = imu_pub;
+    publish_spline_trajectory_ = spline_pub;
+  }
+
+protected:
+  void LoadDataset(const YAML::Node &node);
+
+  bool CreateCacheFolder(const std::string &bag_path);
 
   bool CheckCalibStep(CalibStep desired_step, std::string func_name) const;
 
-  void TrajInitFromSurfel(const TrajectoryEstimatorOptions& options);
+  void TrajInitFromSurfel(const TrajectoryEstimatorOptions &options);
 
   void SetSegmentExtrinsic(int id) {
     calib_param_manager_->p_LinI = p_LinI_backup_.at(id);
@@ -109,10 +137,14 @@ class LICalibrHelper {
   std::vector<std::shared_ptr<Trajectory>> trajectory_vec_;
 
   int iteration_num_;
-  
+
   rclcpp::Node::SharedPtr ros_node_;
+  // 回调函数成员
+  LoamCorrespondencePublisher publish_loam_correspondence_;
+  IMUDataPublisher publish_imu_data_;
+  SplineTrajectoryPublisher publish_spline_trajectory_;
 };
 
-}  // namespace liso
+} // namespace liso
 
 #endif

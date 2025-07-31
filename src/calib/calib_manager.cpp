@@ -21,12 +21,13 @@
  */
 
 #include <boost/filesystem.hpp>
-#include <calib/calib_helper.h>
+#include <calib/calib_manager.h>
 
 namespace liso {
 
-LICalibrHelper::LICalibrHelper(const YAML::Node &node)
-    : calib_step_(Start), iteration_num_(0) {
+LICalibrManager::LICalibrManager(const YAML::Node &node,
+                                 rclcpp::Node::SharedPtr &ros_node)
+    : ros_node_(ros_node), calib_step_(Start), iteration_num_(0) {
   double knot_distance = node["knot_distance"].as<double>();
 
   // data association parameters
@@ -83,7 +84,7 @@ LICalibrHelper::LICalibrHelper(const YAML::Node &node)
   }
 }
 
-void LICalibrHelper::LoadDataset(const YAML::Node &node) {
+void LICalibrManager::LoadDataset(const YAML::Node &node) {
   std::string lidar_model = node["LidarModel"].as<std::string>();
   LidarModelType lidar_model_type;
 
@@ -118,7 +119,7 @@ void LICalibrHelper::LoadDataset(const YAML::Node &node) {
   topic_lidar_ = node["topic_lidar"].as<std::string>();
 }
 
-bool LICalibrHelper::CreateCacheFolder(const std::string &bag_path) {
+bool LICalibrManager::CreateCacheFolder(const std::string &bag_path) {
   boost::filesystem::path p(bag_path);
 
   // Check if it's a ROS2 bag (directory with metadata.yaml)
@@ -142,8 +143,8 @@ bool LICalibrHelper::CreateCacheFolder(const std::string &bag_path) {
   return false;
 }
 
-bool LICalibrHelper::CheckCalibStep(CalibStep desired_step,
-                                    std::string func_name) const {
+bool LICalibrManager::CheckCalibStep(CalibStep desired_step,
+                                     std::string func_name) const {
   static std::string step_descri[] = {"Error",
                                       "Start",
                                       "InitializationDone"
@@ -175,7 +176,7 @@ bool LICalibrHelper::CheckCalibStep(CalibStep desired_step,
   return check_pass;
 }
 
-void LICalibrHelper::Initialization() {
+void LICalibrManager::Initialization() {
   if (!CheckCalibStep(Start, "Initialization"))
     return;
 
@@ -224,7 +225,7 @@ void LICalibrHelper::Initialization() {
   }
 }
 
-void LICalibrHelper::DataAssociationInOdom() {
+void LICalibrManager::DataAssociationInOdom() {
   if (!CheckCalibStep(InitializationDone, "DataAssociationInOdom"))
     return;
 
@@ -255,7 +256,7 @@ void LICalibrHelper::DataAssociationInOdom() {
     calib_step_ = DataAssociationInOdomDone;
 }
 
-void LICalibrHelper::DataAssociationInLocator() {
+void LICalibrManager::DataAssociationInLocator() {
   if (!CheckCalibStep(InitializationDone, "DataAssociationInLocator"))
     return;
 
@@ -287,7 +288,7 @@ void LICalibrHelper::DataAssociationInLocator() {
     calib_step_ = DataAssociationInOdomDone;
 }
 
-void LICalibrHelper::DataAssociationInRefinement() {
+void LICalibrManager::DataAssociationInRefinement() {
   bool ret = true;
   if (iteration_num_ == 1) {
     ret = CheckCalibStep(BatchOptimizationDone, "DataAssociationInRefinement");
@@ -312,7 +313,7 @@ void LICalibrHelper::DataAssociationInRefinement() {
     calib_step_ = DataAssociationInRefinementDone;
 }
 
-void LICalibrHelper::BatchOptimization() {
+void LICalibrManager::BatchOptimization() {
   if (!CheckCalibStep(DataAssociationInOdomDone, "BatchOptimization"))
     return;
 
@@ -334,7 +335,7 @@ void LICalibrHelper::BatchOptimization() {
   SaveCalibResult(cache_path_parent_ + "/calib_result.csv");
 }
 
-void LICalibrHelper::Refinement() {
+void LICalibrManager::Refinement() {
   iteration_num_++;
   std::cout << "\n====== Iteration " << iteration_num_ << " ======\n";
 
@@ -370,7 +371,7 @@ void LICalibrHelper::Refinement() {
       cache_path_ + "/trajectory_control_points.txt");
 }
 
-void LICalibrHelper::TrajInitFromSurfel(
+void LICalibrManager::TrajInitFromSurfel(
     const TrajectoryEstimatorOptions &options) {
   // prepare associated lidar point
   int segment_num = segment_dataset_->SegmentNum();
@@ -429,17 +430,32 @@ void LICalibrHelper::TrajInitFromSurfel(
         cache_path_, relative_start_time, relative_end_time, iteration_num_);
   }
 
-  TrajectoryViewer::PublishLoamCorrespondence(trajectory_vec_.at(0),
-                                              point_measurement_vec.at(0));
-  TrajectoryViewer::PublishIMUData(trajectory_vec_.at(0),
-                                   segment_dataset_->GetImuData(0));
-  TrajectoryViewer::PublishSplineTrajectory(
-      trajectory_vec_.at(0), trajectory_vec_.at(0)->minTime(),
-      trajectory_vec_.at(0)->maxTime(), 0.02);
+  // TrajectoryViewer::PublishLoamCorrespondence(trajectory_vec_.at(0),
+  //                                             point_measurement_vec.at(0));
+  // TrajectoryViewer::PublishIMUData(trajectory_vec_.at(0),
+  //                                  segment_dataset_->GetImuData(0));
+  // TrajectoryViewer::PublishSplineTrajectory(
+  //     trajectory_vec_.at(0), trajectory_vec_.at(0)->minTime(),
+  //     trajectory_vec_.at(0)->maxTime(), 0.02);
+
+  if (publish_loam_correspondence_) {
+    publish_loam_correspondence_(trajectory_vec_.at(0),
+                                 point_measurement_vec.at(0));
+  }
+
+  if (publish_imu_data_) {
+    publish_imu_data_(trajectory_vec_.at(0), segment_dataset_->GetImuData(0));
+  }
+
+  if (publish_spline_trajectory_) {
+    publish_spline_trajectory_(trajectory_vec_.at(0),
+                               trajectory_vec_.at(0)->minTime(),
+                               trajectory_vec_.at(0)->maxTime(), 0.02);
+  }
   SavePointCloud();
 }
 
-void LICalibrHelper::SaveCalibResult(
+void LICalibrManager::SaveCalibResult(
     const std::string &calib_result_file) const {
   if (!boost::filesystem::exists(calib_result_file)) {
     std::ofstream outfile;
@@ -468,7 +484,7 @@ void LICalibrHelper::SaveCalibResult(
   outfile.close();
 }
 
-void LICalibrHelper::SavePointCloud() const {
+void LICalibrManager::SavePointCloud() const {
   if (0 == iteration_num_) {
     for (size_t id = 0; id < segment_dataset_->SegmentNum(); ++id) {
       std::string surfel_path =

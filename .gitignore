@@ -17,3 +17,5 @@ simu_bag/
 launch/.vscode/
 data/bag/._cache/
 data/bag/
+install/
+log/

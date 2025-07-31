@@ -118,7 +118,6 @@ set(thirdparty_libraries
 add_library(lib_calib SHARED
   src/trajectory/se3_trajectory.cpp
   src/trajectory/trajectory_estimator.cpp
-  src/trajectory/trajectory_viewer.cpp
   src/calib/lidar_localization.cpp
   src/calib/lidar_ndt_odometry.cpp
   src/calib/surfel_association.cpp
@@ -134,7 +133,7 @@ rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typ
 target_link_libraries(lib_calib "${cpp_typesupport_target}")
 
 # Main calibration node
-add_executable(li_calib_node src/app/li_calib_node.cpp src/calib/calib_helper.cpp)
+add_executable(li_calib_node src/app/li_calib_node.cpp src/calib/calib_manager.cpp)
 ament_target_dependencies(li_calib_node ${dependencies})
 target_link_libraries(li_calib_node lib_calib ${thirdparty_libraries})
 target_link_libraries(li_calib_node "${cpp_typesupport_target}")
