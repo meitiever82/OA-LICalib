@@ -144,10 +144,6 @@ public:
     return segment_dataset_vec_.at(segment_id).end_time;
   }
 
-  //  const double GetBagStartTime(size_t segment_id) const {
-  //    return segment_dataset_vec_.at(segment_id).bag_start_time;
-  //  }
-
   const std::vector<double> &GetScanTimestamps(size_t segment_id) const {
     return segment_dataset_vec_.at(segment_id).scan_timestamps;
   }
