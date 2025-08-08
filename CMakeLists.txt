@@ -50,6 +50,7 @@ find_package(Eigen3 REQUIRED)
 find_package(PCL 1.12 REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(yaml-cpp REQUIRED)
+find_package(Sophus REQUIRED)
 
 # Set up Ceres (use system installation)
 find_package(Ceres 2.1 REQUIRED)
@@ -79,9 +80,8 @@ include_directories(
   ${Pangolin_INCLUDE_DIRS}
   ${ndt_omp_INCLUDE_DIRS}
   ${boost_INCLUDE_DIR}
+  ${Sophus_INCLUDE_DIRS}
 )
-
-include_directories(thirdparty/Sophus)
 
 # Library dependencies
 set(dependencies
@@ -111,6 +111,7 @@ set(thirdparty_libraries
   ceres
   ${ndt_omp_LIBRARIES}
   ${Boost_LIBRARIES}
+  ${Sophus_LIBRARIES}
   fmt::fmt
 )
 
